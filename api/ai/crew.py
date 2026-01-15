@@ -151,10 +151,69 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
         3. Account for travel times between locations
         4. Are practical given the trip duration and group size""",
         agent=planner_agent,
-        expected_output="Top 5 ranked suggestions with reasons why each is a good fit for the group. Include estimated times and any potential conflicts."
+        expected_output="Top 5 ranked suggestions with reasons why each is a good fit for the group. Include estimated times and any potential conflicts. If the user asks to ADD items, output a JSON block with the items.",
     )
+
+    # Special handling for "add to itinerary" intent - FAST PATH
+    if "add" in user_query.lower() and ("itinerary" in user_query.lower() or "them" in user_query.lower()):
+        add_task = Task(
+            description=f"""The user wants to ADD the previous suggestions to the itinerary as OPTIONS TO VOTE ON.
+            
+            Chat History:
+            {chat_str}
+            
+            User Request: {user_query}
+            
+            Extract the most recent suggested items from the AI's previous messages in the chat history.
+            
+            CRITICAL: These are MUTUALLY EXCLUSIVE OPTIONS - the group will vote to pick ONE.
+            Therefore, ALL items MUST have the SAME day and SAME time slot.
+            
+            Format them as a valid JSON object:
+            {{
+                "action": "add_items",
+                "items": [
+                    {{
+                        "title": "Option 1 Name",
+                        "description": "Brief description",
+                        "day": 1,
+                        "startTime": "20:00",
+                        "endTime": "23:00",
+                        "location": "Address"
+                    }},
+                    {{
+                        "title": "Option 2 Name",
+                        "description": "Brief description", 
+                        "day": 1,
+                        "startTime": "20:00",
+                        "endTime": "23:00",
+                        "location": "Address"
+                    }}
+                ]
+            }}
+            
+            RULES:
+            1. ALL items MUST have the SAME day number.
+            2. ALL items MUST have the SAME startTime and endTime.
+            3. Pick a reasonable evening time like 20:00-23:00 or 19:00-22:00.
+            4. Return ONLY the JSON, nothing before it.
+            """,
+            agent=planner_agent,
+            expected_output="A JSON object with action and items, all sharing the same day and time."
+        )
+        
+        # Use simple single-task crew for speed
+        fast_crew = Crew(
+            agents=[planner_agent],
+            tasks=[add_task],
+            process=Process.sequential,
+            verbose=True
+        )
+        
+        result = fast_crew.kickoff()
+        return str(result)
     
-    # Create and run crew
+    # Create and run full crew for regular suggestions
     crew = Crew(
         agents=[search_agent, preference_agent, planner_agent],
         tasks=[search_task, preference_task, planning_task],

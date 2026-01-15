@@ -170,117 +170,186 @@ export default function ItineraryPanel({
 
             {/* Itinerary List */}
             <div className="flex-1 overflow-y-auto p-5 space-y-8">
-                {groupedByDay.map(({ day, items }) => (
-                    <div key={day} className="animate-fade-in" style={{ animationDelay: `${day * 0.1}s` }}>
-                        <h3 className="text-slate-300 font-semibold mb-4 flex items-center gap-3">
-                            <span className="w-10 h-10 bg-gradient-to-br from-violet-600 to-purple-600 rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-violet-500/30">
-                                {day}
-                            </span>
-                            <span>Day {day}</span>
-                        </h3>
+                {groupedByDay.map(({ day, items }) => {
+                    // Group items by groupId for display
+                    const processedItems: (ItineraryItem | { type: 'group', id: string, items: ItineraryItem[] })[] = [];
+                    const processedGroups = new Set<string>();
 
-                        {items.length === 0 ? (
-                            <p className="text-slate-600 text-sm ml-[52px] py-4 border-l-2 border-dashed border-slate-800 pl-6">No activities yet</p>
-                        ) : (
-                            <div className="relative mt-6">
-                                {/* Continuous vertical line */}
-                                <div className="absolute left-[60px] top-2 bottom-6 w-0.5 bg-violet-500/30" />
+                    items.forEach(item => {
+                        if (item.groupId) {
+                            if (!processedGroups.has(item.groupId)) {
+                                const groupItems = items.filter(i => i.groupId === item.groupId);
+                                processedItems.push({ type: 'group', id: item.groupId, items: groupItems });
+                                processedGroups.add(item.groupId);
+                            }
+                        } else {
+                            processedItems.push(item);
+                        }
+                    });
 
-                                {items.map((item, index) => {
-                                    const config = getStatusConfig(item.status);
-                                    return (
-                                        <div
-                                            key={item.id}
-                                            className="flex gap-6 relative mb-6 group animate-slide-up"
-                                            style={{ animationDelay: `${index * 0.05}s` }}
-                                        >
-                                            {/* Time Column */}
-                                            <div className="w-[45px] text-right pt-[18px] flex-shrink-0">
-                                                {item.startTime ? (
-                                                    <>
-                                                        <div className="text-white font-bold leading-none text-sm">{item.startTime}</div>
-                                                        <div className="text-[10px] text-slate-500 mt-1">{item.endTime}</div>
-                                                    </>
-                                                ) : (
-                                                    <div className="text-slate-600 text-[10px] italic pt-1">TBD</div>
-                                                )}
-                                            </div>
+                    return (
+                        <div key={day} className="animate-fade-in" style={{ animationDelay: `${day * 0.1}s` }}>
+                            <h3 className="text-slate-300 font-semibold mb-4 flex items-center gap-3">
+                                <span className="w-10 h-10 bg-gradient-to-br from-violet-600 to-purple-600 rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-violet-500/30">
+                                    {day}
+                                </span>
+                                <span>Day {day}</span>
+                            </h3>
 
-                                            {/* Timeline Dot */}
-                                            <div className="absolute left-[56px] top-[22px] w-2.5 h-2.5 rounded-full bg-violet-500 ring-4 ring-slate-900 z-10 group-hover:scale-125 transition-transform duration-300 shadow-[0_0_10px_rgba(139,92,246,0.5)]" />
+                            {processedItems.length === 0 ? (
+                                <p className="text-slate-600 text-sm ml-[52px] py-4 border-l-2 border-dashed border-slate-800 pl-6">No activities yet</p>
+                            ) : (
+                                <div className="relative mt-6">
+                                    {/* Continuous vertical line */}
+                                    <div className="absolute left-[60px] top-2 bottom-6 w-0.5 bg-violet-500/30" />
 
-                                            {/* Event Card */}
-                                            <div
-                                                className={`flex-1 p-4 rounded-xl border ${config.bg} ${config.border} hover-lift shadow-lg ${config.glow}`}
-                                            >
-                                                <div className="flex justify-between items-start gap-3">
-                                                    <div className="flex-1">
-                                                        <h4 className="text-white font-medium text-base">{item.title}</h4>
-                                                        {item.location && (
-                                                            <p className="text-sm text-slate-400 mt-1 flex items-center gap-1.5">
-                                                                <span className="text-pink-400">📍</span> {item.location}
-                                                            </p>
-                                                        )}
-                                                        {item.travelTimeFromPrevious && (
-                                                            <p className="text-sm text-slate-400 mt-0.5 flex items-center gap-1.5">
-                                                                <span className="text-blue-400">🚗</span> {item.travelTimeFromPrevious} min travel
-                                                            </p>
-                                                        )}
+                                    {processedItems.map((entry, index) => {
+                                        if ('type' in entry && entry.type === 'group') {
+                                            // Render Option Group
+                                            return (
+                                                <div key={entry.id} className="flex gap-6 relative mb-8 group animate-slide-up ml-[68px] pl-4 border-l-2 border-dashed border-pink-500/30">
+                                                    <div className="absolute -left-[27px] top-0 px-2 py-1 bg-pink-500/20 rounded text-[10px] text-pink-400 font-bold uppercase tracking-wider -rotate-90 origin-right translate-y-8">
+                                                        Choose One
                                                     </div>
-                                                    <div className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${config.badge} uppercase tracking-wide`}>
-                                                        {item.status}
+                                                    <div className="flex-1 space-y-4">
+                                                        {entry.items.map(item => {
+                                                            const config = getStatusConfig(item.status);
+                                                            const isUserSelected = item.votes.yes.includes(userId);
+
+                                                            return (
+                                                                <div key={item.id} className={`p-4 rounded-xl border ${isUserSelected ? 'bg-pink-500/10 border-pink-500/50' : 'bg-white/5 border-white/10'} hover:border-pink-500/30 transition-all`}>
+                                                                    <div className="flex justify-between items-start gap-3">
+                                                                        <div className="flex-1">
+                                                                            <h4 className="text-white font-medium text-base">{item.title}</h4>
+                                                                            <p className="text-xs text-slate-400 mt-1">{item.description}</p>
+                                                                            {item.location && <p className="text-xs text-slate-500 mt-1">📍 {item.location}</p>}
+                                                                            <p className="text-xs text-slate-500">🕒 {item.startTime} - {item.endTime}</p>
+                                                                        </div>
+
+                                                                        {/* Vote Button */}
+                                                                        <button
+                                                                            onClick={() => onVote(item.id, isUserSelected ? 'no' : 'yes')}
+                                                                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isUserSelected
+                                                                                ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg shadow-pink-500/30 scale-110'
+                                                                                : 'bg-white/10 text-slate-400 hover:bg-white/20'}`}
+                                                                        >
+                                                                            {isUserSelected ? '✓' : ''}
+                                                                        </button>
+                                                                    </div>
+                                                                    {/* Vote Count */}
+                                                                    <div className="mt-2 flex items-center gap-2">
+                                                                        <div className="flex -space-x-1.5">
+                                                                            {item.votes.yes.slice(0, 3).map((v, i) => (
+                                                                                <div key={i} className="w-4 h-4 rounded-full bg-slate-700 border border-slate-800" />
+                                                                            ))}
+                                                                        </div>
+                                                                        <span className="text-[10px] text-slate-500">{item.votes.yes.length} votes</span>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </div>
                                                 </div>
-
-                                                {/* Voting */}
-                                                {item.status === 'pending' && (
-                                                    <div className="mt-4 pt-4 border-t border-white/10">
-                                                        {/* Progress bar */}
-                                                        <div className="mb-3">
-                                                            <div className="flex justify-between text-[10px] text-slate-400 mb-1.5 uppercase tracking-wider">
-                                                                <span>{item.votes.yes.length}/{memberCount} VOTES</span>
-                                                                <span>{getVotePercentage(item)}%</span>
-                                                            </div>
-                                                            <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                                                                <div
-                                                                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500"
-                                                                    style={{ width: `${getVotePercentage(item)}%` }}
-                                                                />
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="flex items-center justify-end gap-2">
-                                                            {!hasVoted(item) ? (
-                                                                <>
-                                                                    <button
-                                                                        onClick={() => onVote(item.id, 'yes')}
-                                                                        className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-smooth text-xs font-medium flex items-center gap-1"
-                                                                    >
-                                                                        <span>✓</span>
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => onVote(item.id, 'no')}
-                                                                        className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-smooth text-xs font-medium flex items-center gap-1"
-                                                                    >
-                                                                        <span>✗</span>
-                                                                    </button>
-                                                                </>
-                                                            ) : (
-                                                                <span className="text-xs text-slate-400 font-medium">
-                                                                    {item.votes.yes.includes(userId) ? '✓ Voted Yes' : '✗ Voted No'}
-                                                                </span>
-                                                            )}
-                                                        </div>
+                                            );
+                                        } else {
+                                            // Render Single Item (Regular)
+                                            const item = entry as ItineraryItem;
+                                            const config = getStatusConfig(item.status);
+                                            return (
+                                                <div
+                                                    key={item.id}
+                                                    className="flex gap-6 relative mb-6 group animate-slide-up"
+                                                    style={{ animationDelay: `${index * 0.05}s` }}
+                                                >
+                                                    {/* Time Column */}
+                                                    <div className="w-[45px] text-right pt-[18px] flex-shrink-0">
+                                                        {item.startTime ? (
+                                                            <>
+                                                                <div className="text-white font-bold leading-none text-sm">{item.startTime}</div>
+                                                                <div className="text-[10px] text-slate-500 mt-1">{item.endTime}</div>
+                                                            </>
+                                                        ) : (
+                                                            <div className="text-slate-600 text-[10px] italic pt-1">TBD</div>
+                                                        )}
                                                     </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-                ))}
+
+                                                    {/* Timeline Dot */}
+                                                    <div className="absolute left-[56px] top-[22px] w-2.5 h-2.5 rounded-full bg-violet-500 ring-4 ring-slate-900 z-10 group-hover:scale-125 transition-transform duration-300 shadow-[0_0_10px_rgba(139,92,246,0.5)]" />
+
+                                                    {/* Event Card */}
+                                                    <div
+                                                        className={`flex-1 p-4 rounded-xl border ${config.bg} ${config.border} hover-lift shadow-lg ${config.glow}`}
+                                                    >
+                                                        <div className="flex justify-between items-start gap-3">
+                                                            <div className="flex-1">
+                                                                <h4 className="text-white font-medium text-base">{item.title}</h4>
+                                                                {item.location && (
+                                                                    <p className="text-sm text-slate-400 mt-1 flex items-center gap-1.5">
+                                                                        <span className="text-pink-400">📍</span> {item.location}
+                                                                    </p>
+                                                                )}
+                                                                {item.travelTimeFromPrevious && (
+                                                                    <p className="text-sm text-slate-400 mt-0.5 flex items-center gap-1.5">
+                                                                        <span className="text-blue-400">🚗</span> {item.travelTimeFromPrevious} min travel
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                            <div className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${config.badge} uppercase tracking-wide`}>
+                                                                {item.status}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Voting */}
+                                                        {item.status === 'pending' && (
+                                                            <div className="mt-4 pt-4 border-t border-white/10">
+                                                                {/* Progress bar */}
+                                                                <div className="mb-3">
+                                                                    <div className="flex justify-between text-[10px] text-slate-400 mb-1.5 uppercase tracking-wider">
+                                                                        <span>{item.votes.yes.length}/{memberCount} VOTES</span>
+                                                                        <span>{getVotePercentage(item)}%</span>
+                                                                    </div>
+                                                                    <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                                                                        <div
+                                                                            className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500"
+                                                                            style={{ width: `${getVotePercentage(item)}%` }}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="flex items-center justify-end gap-2">
+                                                                    {!hasVoted(item) ? (
+                                                                        <>
+                                                                            <button
+                                                                                onClick={() => onVote(item.id, 'yes')}
+                                                                                className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-smooth text-xs font-medium flex items-center gap-1"
+                                                                            >
+                                                                                <span>✓</span>
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => onVote(item.id, 'no')}
+                                                                                className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-smooth text-xs font-medium flex items-center gap-1"
+                                                                            >
+                                                                                <span>✗</span>
+                                                                            </button>
+                                                                        </>
+                                                                    ) : (
+                                                                        <span className="text-xs text-slate-400 font-medium">
+                                                                            {item.votes.yes.includes(userId) ? '✓ Voted Yes' : '✗ Voted No'}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );

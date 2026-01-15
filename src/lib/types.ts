@@ -20,6 +20,7 @@ export interface ItineraryItem {
   startTime: string;
   endTime: string;
   location?: string;
+  groupId?: string; // For mutually exclusive options
   travelTimeFromPrevious?: number; // in minutes
   votes: {
     yes: string[];  // user IDs

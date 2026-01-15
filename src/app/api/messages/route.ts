@@ -62,19 +62,89 @@ export async function POST(request: NextRequest) {
                 .sort({ createdAt: -1 })
                 .limit(20);
 
-            // Call AI endpoint (will be handled asynchronously in production)
+            // Call AI endpoint
             try {
-                const aiResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/ai/suggest`, {
+                // In development, call the local Python server directly to avoid Next.js proxy timeouts
+                const aiUrl = process.env.NODE_ENV === 'development'
+                    ? 'http://127.0.0.1:5328/api/ai/suggest'
+                    : `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/ai/suggest`;
+
+                console.log(`Sending AI request to: ${aiUrl}`);
+
+                const aiResponse = await fetch(aiUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         query: content.replace(/@ai/gi, '').trim(),
                         tripContext: trip,
                         chatHistory: recentMessages.reverse()
-                    })
+                    }),
+                    // Set a long timeout for AI generation (5 minutes)
+                    signal: AbortSignal.timeout(300000)
                 });
 
                 const aiResult = await aiResponse.json();
+                let finalContent = aiResult.result;
+
+                // Check for JSON action block (with or without code fences)
+                let jsonMatch = finalContent.match(/```json\n([\s\S]*?)\n```/);
+                let jsonString = jsonMatch ? jsonMatch[1] : null;
+                let jsonStartIndex = -1;
+
+                // If no code fence match, try to find raw JSON object
+                if (!jsonString) {
+                    const rawJsonMatch = finalContent.match(/\{\s*"action"\s*:\s*"add_items"[\s\S]*\}/);
+                    if (rawJsonMatch) {
+                        jsonString = rawJsonMatch[0];
+                        jsonStartIndex = finalContent.indexOf(jsonString);
+                    }
+                }
+
+                if (jsonString) {
+                    try {
+                        const actionData = JSON.parse(jsonString);
+                        if (actionData.action === 'add_items' && Array.isArray(actionData.items)) {
+                            // Generate a unique groupId for this batch of options
+                            const groupId = uuidv4();
+
+                            const newItems = actionData.items.map((item: any) => ({
+                                id: uuidv4(),
+                                title: item.title,
+                                description: item.description || '',
+                                day: item.day || 1,
+                                startTime: item.startTime || '09:00',
+                                endTime: item.endTime || '11:00',
+                                location: item.location || '',
+                                groupId: groupId, // Link them as mutually exclusive options
+                                votes: { yes: [], no: [] },
+                                status: 'pending',
+                                suggestedBy: 'ai',
+                                createdAt: new Date()
+                            }));
+
+                            // Add to trip
+                            const tripDoc = await Trip.findById(tripId);
+                            if (tripDoc) {
+                                tripDoc.itinerary.push(...newItems);
+                                await tripDoc.save();
+                                console.log(`Added ${newItems.length} items to itinerary from AI`);
+                            }
+
+                            // Remove the JSON block from the user-facing message
+                            if (jsonMatch) {
+                                finalContent = finalContent.replace(jsonMatch[0], '').trim();
+                            } else if (jsonStartIndex !== -1) {
+                                finalContent = finalContent.substring(0, jsonStartIndex).trim();
+                            }
+
+                            if (!finalContent) {
+                                finalContent = `I've added ${newItems.length} options to the itinerary for you to vote on. Check out the Itinerary panel!`;
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Failed to parse AI action:', e);
+                    }
+                }
 
                 // Save AI response as a message
                 if (aiResult.success) {
@@ -82,7 +152,7 @@ export async function POST(request: NextRequest) {
                         tripId,
                         senderId: 'ai',
                         senderName: 'AI Assistant',
-                        content: aiResult.result,
+                        content: finalContent,
                         isAIMention: false,
                     });
                     await aiMessage.save();

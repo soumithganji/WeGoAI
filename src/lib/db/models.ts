@@ -32,6 +32,7 @@ const ItineraryItemSchema = new Schema({
     startTime: String,
     endTime: String,
     location: String,
+    groupId: String,
     travelTimeFromPrevious: Number,
     votes: {
         yes: [String],

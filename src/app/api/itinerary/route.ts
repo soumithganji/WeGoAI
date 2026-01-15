@@ -29,9 +29,21 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Item not found' }, { status: 404 });
         }
 
-        // Remove previous vote if exists
-        item.votes.yes = item.votes.yes.filter((id: string) => id !== userId);
-        item.votes.no = item.votes.no.filter((id: string) => id !== userId);
+        // Helper to remove vote
+        const removeVote = (voteArray: string[], uid: string) => voteArray.filter(id => id !== uid);
+
+        // Remove previous vote if exists (toggle behavior)
+        item.votes.yes = removeVote(item.votes.yes, userId);
+        item.votes.no = removeVote(item.votes.no, userId);
+
+        // If voting YES and item has a group, remove YES votes from other items in the same group
+        if (vote === 'yes' && item.groupId) {
+            trip.itinerary.forEach((otherItem: any) => {
+                if (otherItem.id !== itemId && otherItem.groupId === item.groupId) {
+                    otherItem.votes.yes = removeVote(otherItem.votes.yes, userId);
+                }
+            });
+        }
 
         // Add new vote
         if (vote === 'yes') {
