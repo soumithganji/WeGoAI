@@ -77,7 +77,7 @@ export default function HomePage() {
         {/* Header */}
         <div className="text-center mb-16">
           <h1 className="text-6xl font-bold text-white mb-4 tracking-tight">
-            🌍 Trip<span className="text-pink-400">AI</span>
+            🌍 WeGo<span className="text-pink-400">AI</span>
           </h1>
           <p className="text-xl text-purple-200 max-w-2xl mx-auto">
             Plan your perfect group trip with AI-powered suggestions, real-time collaboration, and smart itinerary management.
