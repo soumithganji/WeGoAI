@@ -45,13 +45,11 @@ export async function POST(request: NextRequest) {
         const isAIMention = content.toLowerCase().includes('@ai');
 
         const message = new Message({
-            _id: uuidv4(),
             tripId,
             senderId,
             senderName,
             content,
             isAIMention,
-            createdAt: new Date()
         });
 
         await message.save();
@@ -81,13 +79,11 @@ export async function POST(request: NextRequest) {
                 // Save AI response as a message
                 if (aiResult.success) {
                     const aiMessage = new Message({
-                        _id: uuidv4(),
                         tripId,
                         senderId: 'ai',
                         senderName: 'AI Assistant',
                         content: aiResult.result,
                         isAIMention: false,
-                        createdAt: new Date()
                     });
                     await aiMessage.save();
 

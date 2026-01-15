@@ -73,36 +73,46 @@ export default function ChatInterface({
                     </div>
                 )}
 
-                {messages.map((msg, index) => (
-                    <div
-                        key={msg.id}
-                        className={`flex ${msg.senderId === userId ? 'justify-end' : 'justify-start'} animate-slide-up`}
-                        style={{ animationDelay: `${index * 0.05}s` }}
-                    >
+                {messages.map((msg, index) => {
+                    const messageId = (msg as any)._id || msg.id || index;
+                    const createdAt = msg.createdAt ? new Date(msg.createdAt) : new Date();
+                    const timeString = !isNaN(createdAt.getTime())
+                        ? createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : '';
+
+                    return (
                         <div
-                            className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-lg ${msg.senderId === 'ai'
+                            key={messageId}
+                            className={`flex ${msg.senderId === userId ? 'justify-end' : 'justify-start'} animate-slide-up`}
+                            style={{ animationDelay: `${index * 0.05}s` }}
+                        >
+                            <div
+                                className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-lg ${msg.senderId === 'ai'
                                     ? 'bg-gradient-to-br from-violet-600 to-pink-600 text-white shadow-violet-500/20'
                                     : msg.senderId === userId
                                         ? 'bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-indigo-500/20'
                                         : 'bg-white/10 text-white shadow-black/20 border border-white/5'
-                                }`}
-                        >
-                            {msg.senderId !== userId && msg.senderId !== 'ai' && (
-                                <p className="text-xs text-slate-300 mb-1.5 font-medium">{msg.senderName}</p>
-                            )}
-                            {msg.senderId === 'ai' && (
-                                <p className="text-xs text-violet-200 mb-1.5 flex items-center gap-1.5 font-medium">
-                                    <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[10px]">🤖</span>
-                                    AI Assistant
-                                </p>
-                            )}
-                            <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                            <p className="text-xs opacity-50 mt-2 text-right">
-                                {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </p>
+                                    }`}
+                            >
+                                {msg.senderId !== userId && msg.senderId !== 'ai' && (
+                                    <p className="text-xs text-slate-300 mb-1.5 font-medium">{msg.senderName}</p>
+                                )}
+                                {msg.senderId === 'ai' && (
+                                    <p className="text-xs text-violet-200 mb-1.5 flex items-center gap-1.5 font-medium">
+                                        <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[10px]">🤖</span>
+                                        AI Assistant
+                                    </p>
+                                )}
+                                <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                                {timeString && (
+                                    <p className="text-xs opacity-50 mt-2 text-right">
+                                        {timeString}
+                                    </p>
+                                )}
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
 
                 {isLoading && (
                     <div className="flex justify-start animate-fade-in">
