@@ -54,11 +54,26 @@ export default function ItineraryPanel({
             .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || '')),
     }));
 
-    const getStatusColor = (status: string) => {
+    const getStatusConfig = (status: string) => {
         switch (status) {
-            case 'approved': return 'bg-green-500';
-            case 'rejected': return 'bg-red-500';
-            default: return 'bg-yellow-500';
+            case 'approved': return {
+                bg: 'bg-emerald-500/20',
+                border: 'border-emerald-500/50',
+                badge: 'bg-emerald-500 text-white',
+                glow: 'shadow-emerald-500/20'
+            };
+            case 'rejected': return {
+                bg: 'bg-red-500/10',
+                border: 'border-red-500/30',
+                badge: 'bg-red-500 text-white',
+                glow: 'shadow-red-500/20'
+            };
+            default: return {
+                bg: 'bg-white/5',
+                border: 'border-white/10',
+                badge: 'bg-amber-500 text-white',
+                glow: 'shadow-amber-500/20'
+            };
         }
     };
 
@@ -66,17 +81,25 @@ export default function ItineraryPanel({
         return item.votes.yes.includes(userId) || item.votes.no.includes(userId);
     };
 
+    const getVotePercentage = (item: ItineraryItem) => {
+        if (memberCount === 0) return 0;
+        return Math.round((item.votes.yes.length / memberCount) * 100);
+    };
+
     return (
-        <div className="flex flex-col h-full bg-gray-800">
+        <div className="flex flex-col h-full bg-gradient-to-b from-slate-900 to-slate-950">
             {/* Header */}
-            <div className="px-4 py-3 bg-gray-900 border-b border-gray-700 flex justify-between items-center">
+            <div className="px-5 py-4 bg-slate-900/80 backdrop-blur-xl border-b border-white/5 flex justify-between items-center">
                 <div>
-                    <h2 className="text-lg font-semibold text-white">📋 Itinerary</h2>
-                    <p className="text-sm text-gray-400">{itinerary.length} activities planned</p>
+                    <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                        <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-sm">📋</span>
+                        Itinerary
+                    </h2>
+                    <p className="text-sm text-slate-500 mt-1">{itinerary.length} activities planned</p>
                 </div>
                 <button
                     onClick={() => setIsAddingItem(true)}
-                    className="px-3 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-all text-sm font-medium"
+                    className="px-4 py-2.5 bg-gradient-to-r from-pink-600 to-violet-600 text-white rounded-xl hover:from-pink-500 hover:to-violet-500 transition-smooth text-sm font-medium shadow-lg shadow-pink-500/20"
                 >
                     + Add
                 </button>
@@ -84,37 +107,40 @@ export default function ItineraryPanel({
 
             {/* Add Item Modal */}
             {isAddingItem && (
-                <div className="p-4 bg-gray-700 border-b border-gray-600">
-                    <h3 className="text-white font-semibold mb-3">Add Activity</h3>
+                <div className="p-5 bg-slate-800/80 backdrop-blur-xl border-b border-white/5 animate-slide-up">
+                    <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-lg bg-pink-500/20 flex items-center justify-center text-sm">✨</span>
+                        Add Activity
+                    </h3>
                     <div className="space-y-3">
                         <input
                             type="text"
                             placeholder="Activity title"
                             value={newItem.title}
                             onChange={(e) => setNewItem({ ...newItem, title: e.target.value })}
-                            className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-lg text-white placeholder-gray-400"
+                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus-glow transition-smooth"
                         />
                         <div className="grid grid-cols-3 gap-2">
                             <select
                                 value={newItem.day}
                                 onChange={(e) => setNewItem({ ...newItem, day: parseInt(e.target.value) })}
-                                className="px-3 py-2 bg-gray-600 border border-gray-500 rounded-lg text-white"
+                                className="px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white focus-glow transition-smooth"
                             >
                                 {Array.from({ length: daysCount }, (_, i) => (
-                                    <option key={i + 1} value={i + 1}>Day {i + 1}</option>
+                                    <option key={i + 1} value={i + 1} className="bg-slate-900">Day {i + 1}</option>
                                 ))}
                             </select>
                             <input
                                 type="time"
                                 value={newItem.startTime}
                                 onChange={(e) => setNewItem({ ...newItem, startTime: e.target.value })}
-                                className="px-3 py-2 bg-gray-600 border border-gray-500 rounded-lg text-white"
+                                className="px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white focus-glow transition-smooth"
                             />
                             <input
                                 type="time"
                                 value={newItem.endTime}
                                 onChange={(e) => setNewItem({ ...newItem, endTime: e.target.value })}
-                                className="px-3 py-2 bg-gray-600 border border-gray-500 rounded-lg text-white"
+                                className="px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white focus-glow transition-smooth"
                             />
                         </div>
                         <input
@@ -122,18 +148,18 @@ export default function ItineraryPanel({
                             placeholder="Location (optional)"
                             value={newItem.location}
                             onChange={(e) => setNewItem({ ...newItem, location: e.target.value })}
-                            className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-lg text-white placeholder-gray-400"
+                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus-glow transition-smooth"
                         />
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 pt-1">
                             <button
                                 onClick={handleAddItem}
-                                className="flex-1 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                                className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-500 hover:to-teal-500 transition-smooth font-medium"
                             >
                                 Add for Voting
                             </button>
                             <button
                                 onClick={() => setIsAddingItem(false)}
-                                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500"
+                                className="px-5 py-3 bg-white/10 text-white rounded-xl hover:bg-white/20 transition-smooth"
                             >
                                 Cancel
                             </button>
@@ -143,86 +169,99 @@ export default function ItineraryPanel({
             )}
 
             {/* Itinerary List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-6">
+            <div className="flex-1 overflow-y-auto p-5 space-y-8">
                 {groupedByDay.map(({ day, items }) => (
-                    <div key={day}>
-                        <h3 className="text-purple-400 font-semibold mb-3 flex items-center gap-2">
-                            <span className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white text-sm">
+                    <div key={day} className="animate-fade-in" style={{ animationDelay: `${day * 0.1}s` }}>
+                        <h3 className="text-slate-300 font-semibold mb-4 flex items-center gap-3">
+                            <span className="w-10 h-10 bg-gradient-to-br from-violet-600 to-purple-600 rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-violet-500/30">
                                 {day}
                             </span>
-                            Day {day}
+                            <span>Day {day}</span>
                         </h3>
 
                         {items.length === 0 ? (
-                            <p className="text-gray-500 text-sm ml-10">No activities yet</p>
+                            <p className="text-slate-600 text-sm ml-[52px] py-4 border-l-2 border-dashed border-slate-800 pl-6">No activities yet</p>
                         ) : (
-                            <div className="space-y-3 ml-10">
-                                {items.map((item) => (
-                                    <div
-                                        key={item.id}
-                                        className={`p-4 rounded-xl border ${item.status === 'approved'
-                                                ? 'bg-green-900/30 border-green-600'
-                                                : item.status === 'rejected'
-                                                    ? 'bg-red-900/30 border-red-600 opacity-50'
-                                                    : 'bg-gray-700 border-gray-600'
-                                            }`}
-                                    >
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <h4 className="text-white font-medium">{item.title}</h4>
-                                                {item.startTime && (
-                                                    <p className="text-sm text-gray-400">
-                                                        🕐 {item.startTime} - {item.endTime}
-                                                    </p>
-                                                )}
-                                                {item.location && (
-                                                    <p className="text-sm text-gray-400">
-                                                        📍 {item.location}
-                                                    </p>
-                                                )}
-                                                {item.travelTimeFromPrevious && (
-                                                    <p className="text-sm text-blue-400">
-                                                        🚗 {item.travelTimeFromPrevious} min travel
-                                                    </p>
-                                                )}
-                                            </div>
-                                            <div className={`px-2 py-1 rounded text-xs font-medium text-white ${getStatusColor(item.status)}`}>
-                                                {item.status}
-                                            </div>
-                                        </div>
+                            <div className="space-y-3 ml-5 border-l-2 border-violet-500/30 pl-6">
+                                {items.map((item, index) => {
+                                    const config = getStatusConfig(item.status);
+                                    return (
+                                        <div
+                                            key={item.id}
+                                            className={`p-4 rounded-xl border ${config.bg} ${config.border} hover-lift shadow-lg ${config.glow} relative`}
+                                            style={{ animationDelay: `${index * 0.05}s` }}
+                                        >
+                                            {/* Timeline dot */}
+                                            <div className="absolute -left-[31px] top-4 w-4 h-4 rounded-full bg-violet-500 border-4 border-slate-900" />
 
-                                        {/* Voting */}
-                                        {item.status === 'pending' && (
-                                            <div className="mt-3 pt-3 border-t border-gray-600">
-                                                <div className="flex items-center justify-between">
-                                                    <p className="text-sm text-gray-400">
-                                                        {item.votes.yes.length}/{memberCount} approved
-                                                    </p>
-                                                    {!hasVoted(item) ? (
-                                                        <div className="flex gap-2">
-                                                            <button
-                                                                onClick={() => onVote(item.id, 'yes')}
-                                                                className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
-                                                            >
-                                                                ✓ Yes
-                                                            </button>
-                                                            <button
-                                                                onClick={() => onVote(item.id, 'no')}
-                                                                className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
-                                                            >
-                                                                ✗ No
-                                                            </button>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-sm text-gray-400">
-                                                            {item.votes.yes.includes(userId) ? '✓ Voted Yes' : '✗ Voted No'}
-                                                        </span>
+                                            <div className="flex justify-between items-start gap-3">
+                                                <div className="flex-1">
+                                                    <h4 className="text-white font-medium text-base">{item.title}</h4>
+                                                    {item.startTime && (
+                                                        <p className="text-sm text-slate-400 mt-1 flex items-center gap-1.5">
+                                                            <span className="text-cyan-400">🕐</span> {item.startTime} - {item.endTime}
+                                                        </p>
+                                                    )}
+                                                    {item.location && (
+                                                        <p className="text-sm text-slate-400 mt-0.5 flex items-center gap-1.5">
+                                                            <span className="text-pink-400">📍</span> {item.location}
+                                                        </p>
+                                                    )}
+                                                    {item.travelTimeFromPrevious && (
+                                                        <p className="text-sm text-slate-400 mt-0.5 flex items-center gap-1.5">
+                                                            <span className="text-blue-400">🚗</span> {item.travelTimeFromPrevious} min travel
+                                                        </p>
                                                     )}
                                                 </div>
+                                                <div className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${config.badge} uppercase tracking-wide`}>
+                                                    {item.status}
+                                                </div>
                                             </div>
-                                        )}
-                                    </div>
-                                ))}
+
+                                            {/* Voting */}
+                                            {item.status === 'pending' && (
+                                                <div className="mt-4 pt-4 border-t border-white/10">
+                                                    {/* Progress bar */}
+                                                    <div className="mb-3">
+                                                        <div className="flex justify-between text-xs text-slate-400 mb-1.5">
+                                                            <span>{item.votes.yes.length} of {memberCount} approved</span>
+                                                            <span>{getVotePercentage(item)}%</span>
+                                                        </div>
+                                                        <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                                                            <div
+                                                                className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500"
+                                                                style={{ width: `${getVotePercentage(item)}%` }}
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        {!hasVoted(item) ? (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => onVote(item.id, 'yes')}
+                                                                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-smooth text-sm font-medium flex items-center gap-1.5"
+                                                                >
+                                                                    <span>✓</span> Yes
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => onVote(item.id, 'no')}
+                                                                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-smooth text-sm font-medium flex items-center gap-1.5"
+                                                                >
+                                                                    <span>✗</span> No
+                                                                </button>
+                                                            </>
+                                                        ) : (
+                                                            <span className="text-sm text-slate-400 px-3 py-1.5 bg-white/5 rounded-lg">
+                                                                {item.votes.yes.includes(userId) ? '✓ Voted Yes' : '✗ Voted No'}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
                     </div>

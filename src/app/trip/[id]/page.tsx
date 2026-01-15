@@ -22,11 +22,9 @@ export default function TripPage({ params }: TripPageProps) {
     const [showItinerary, setShowItinerary] = useState(true);
     const [showSettings, setShowSettings] = useState(false);
 
-    // Load trip and user data
     useEffect(() => {
         const loadData = async () => {
             try {
-                // Get user from localStorage
                 const storedUser = localStorage.getItem(`trip_${tripId}_user`);
                 if (!storedUser) {
                     router.push(`/trip/${tripId}/join`);
@@ -37,7 +35,6 @@ export default function TripPage({ params }: TripPageProps) {
                 setUserId(user.id);
                 setUserName(user.name);
 
-                // Fetch trip
                 const tripRes = await fetch(`/api/trips/${tripId}`);
                 const tripData = await tripRes.json();
                 if (tripData.error) {
@@ -47,7 +44,6 @@ export default function TripPage({ params }: TripPageProps) {
                 }
                 setTrip(tripData);
 
-                // Fetch messages
                 const msgRes = await fetch(`/api/messages?tripId=${tripId}`);
                 const msgData = await msgRes.json();
                 setMessages(msgData);
@@ -61,7 +57,6 @@ export default function TripPage({ params }: TripPageProps) {
 
         loadData();
 
-        // Poll for new messages every 3 seconds
         const interval = setInterval(async () => {
             try {
                 const msgRes = await fetch(`/api/messages?tripId=${tripId}`);
@@ -93,11 +88,8 @@ export default function TripPage({ params }: TripPageProps) {
             });
 
             const data = await res.json();
-
-            // Add message to state
             setMessages((prev) => [...prev, data]);
 
-            // If AI responded, add that too
             if (data.aiResponse) {
                 setMessages((prev) => [...prev, data.aiResponse]);
             }
@@ -119,7 +111,6 @@ export default function TripPage({ params }: TripPageProps) {
                 }),
             });
 
-            // Refresh trip data
             const tripRes = await fetch(`/api/trips/${tripId}`);
             const tripData = await tripRes.json();
             setTrip(tripData);
@@ -147,7 +138,6 @@ export default function TripPage({ params }: TripPageProps) {
                 return;
             }
 
-            // Refresh trip data
             const tripRes = await fetch(`/api/trips/${tripId}`);
             const tripData = await tripRes.json();
             setTrip(tripData);
@@ -164,7 +154,6 @@ export default function TripPage({ params }: TripPageProps) {
                 body: JSON.stringify({ settings }),
             });
 
-            // Refresh trip
             const tripRes = await fetch(`/api/trips/${tripId}`);
             setTrip(await tripRes.json());
             setShowSettings(false);
@@ -181,51 +170,68 @@ export default function TripPage({ params }: TripPageProps) {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-                <div className="text-white text-xl">Loading trip...</div>
+            <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-purple-950 flex items-center justify-center">
+                <div className="flex items-center gap-3">
+                    <svg className="animate-spin h-8 w-8 text-violet-500" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    <span className="text-white text-xl font-medium">Loading trip...</span>
+                </div>
             </div>
         );
     }
 
     if (!trip) {
         return (
-            <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-                <div className="text-white text-xl">Trip not found</div>
+            <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-purple-950 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="text-6xl mb-4">🔍</div>
+                    <div className="text-white text-xl">Trip not found</div>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="h-screen bg-gray-900 flex flex-col">
+        <div className="h-screen bg-slate-950 flex flex-col">
             {/* Header */}
-            <header className="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <h1 className="text-xl font-bold text-white">
-                        🌍 {trip.name}
+            <header className="bg-gradient-to-r from-slate-900/90 via-indigo-950/90 to-purple-950/90 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex items-center justify-between animate-fade-in">
+                <div className="flex items-center gap-5">
+                    <h1 className="text-xl font-bold text-white flex items-center gap-2">
+                        <span className="text-2xl">🌍</span>
+                        <span>{trip.name}</span>
                     </h1>
-                    <span className="text-sm text-gray-400">
-                        📍 {trip.settings.destination}
-                    </span>
-                    <span className="text-sm text-gray-400">
-                        👥 {trip.members.length} members
-                    </span>
+                    <div className="hidden sm:flex items-center gap-4 text-sm">
+                        <span className="text-slate-400 flex items-center gap-1.5">
+                            <span className="text-violet-400">📍</span> {trip.settings.destination}
+                        </span>
+                        <span className="text-slate-400 flex items-center gap-1.5">
+                            <span className="text-cyan-400">👥</span> {trip.members.length} members
+                        </span>
+                    </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                     <button
                         onClick={copyInviteLink}
-                        className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700"
+                        className="px-4 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:from-violet-500 hover:to-purple-500 transition-smooth flex items-center gap-2 shadow-lg shadow-violet-500/20"
                     >
-                        📋 Invite Code: {trip.inviteCode}
+                        <span>📋</span>
+                        <span className="hidden sm:inline">Code:</span>
+                        <span className="font-mono tracking-wider">{trip.inviteCode}</span>
                     </button>
                     <button
                         onClick={() => setShowSettings(!showSettings)}
-                        className="px-3 py-1.5 bg-gray-700 text-white rounded-lg text-sm hover:bg-gray-600"
+                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-smooth flex items-center gap-2 ${showSettings
+                                ? 'bg-violet-600 text-white'
+                                : 'bg-white/10 text-white hover:bg-white/20 border border-white/10'
+                            }`}
                     >
-                        ⚙️ Settings
+                        ⚙️ <span className="hidden sm:inline">Settings</span>
                     </button>
                     <button
                         onClick={() => setShowItinerary(!showItinerary)}
-                        className="px-3 py-1.5 bg-gray-700 text-white rounded-lg text-sm hover:bg-gray-600 md:hidden"
+                        className="px-4 py-2 bg-white/10 text-white rounded-xl text-sm font-medium hover:bg-white/20 transition-smooth md:hidden border border-white/10"
                     >
                         {showItinerary ? '💬 Chat' : '📋 Itinerary'}
                     </button>
@@ -234,44 +240,47 @@ export default function TripPage({ params }: TripPageProps) {
 
             {/* Settings Panel */}
             {showSettings && (
-                <div className="bg-gray-800 border-b border-gray-700 p-4">
-                    <h3 className="text-white font-semibold mb-3">Trip Settings</h3>
+                <div className="bg-slate-900/80 backdrop-blur-xl border-b border-white/10 p-5 animate-slide-up">
+                    <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-lg bg-violet-500/20 flex items-center justify-center text-sm">⚙️</span>
+                        Trip Settings
+                    </h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div>
-                            <label className="block text-gray-400 text-sm mb-1">Landing Time</label>
+                            <label className="block text-slate-400 text-sm mb-2">Landing Time</label>
                             <input
                                 type="datetime-local"
                                 defaultValue={trip.settings.landingTime}
                                 onChange={(e) => handleUpdateSettings({ landingTime: e.target.value })}
-                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm"
+                                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus-glow transition-smooth"
                             />
                         </div>
                         <div>
-                            <label className="block text-gray-400 text-sm mb-1">Departure Time</label>
+                            <label className="block text-slate-400 text-sm mb-2">Departure Time</label>
                             <input
                                 type="datetime-local"
                                 defaultValue={trip.settings.departureTime}
                                 onChange={(e) => handleUpdateSettings({ departureTime: e.target.value })}
-                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm"
+                                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus-glow transition-smooth"
                             />
                         </div>
                         <div>
-                            <label className="block text-gray-400 text-sm mb-1">Airport</label>
+                            <label className="block text-slate-400 text-sm mb-2">Airport</label>
                             <input
                                 type="text"
                                 defaultValue={trip.settings.airport}
                                 onBlur={(e) => handleUpdateSettings({ airport: e.target.value })}
-                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm"
+                                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus-glow transition-smooth"
                                 placeholder="e.g., CDG"
                             />
                         </div>
                         <div>
-                            <label className="block text-gray-400 text-sm mb-1">Hotel</label>
+                            <label className="block text-slate-400 text-sm mb-2">Hotel</label>
                             <input
                                 type="text"
                                 defaultValue={trip.settings.hotel}
                                 onBlur={(e) => handleUpdateSettings({ hotel: e.target.value })}
-                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm"
+                                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus-glow transition-smooth"
                                 placeholder="Hotel name"
                             />
                         </div>
@@ -293,7 +302,7 @@ export default function TripPage({ params }: TripPageProps) {
                 </div>
 
                 {/* Itinerary Panel */}
-                <div className={`${showItinerary ? 'flex' : 'hidden md:flex'} w-full md:w-96 flex-col border-l border-gray-700`}>
+                <div className={`${showItinerary ? 'flex' : 'hidden md:flex'} w-full md:w-[400px] flex-col border-l border-white/10`}>
                     <ItineraryPanel
                         tripId={tripId}
                         userId={userId}

@@ -40,7 +40,6 @@ export default function HomePage() {
 
       const data = await response.json();
       if (data.id) {
-        // Store user info in localStorage
         localStorage.setItem(`trip_${data.id}_user`, JSON.stringify({
           id: data.creatorId,
           name: formData.creatorName,
@@ -72,32 +71,40 @@ export default function HomePage() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800">
-      <div className="container mx-auto px-4 py-16">
+    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-purple-950 relative overflow-hidden">
+      {/* Decorative floating orbs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 left-10 w-72 h-72 bg-violet-500/20 rounded-full blur-3xl animate-float" />
+        <div className="absolute top-40 right-20 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '1s' }} />
+        <div className="absolute bottom-20 left-1/3 w-80 h-80 bg-pink-500/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s' }} />
+      </div>
+
+      <div className="container mx-auto px-4 py-16 relative z-10">
         {/* Header */}
-        <div className="text-center mb-16">
-          <h1 className="text-6xl font-bold text-white mb-4 tracking-tight">
-            🌍 WeGo<span className="text-pink-400">AI</span>
+        <div className="text-center mb-16 animate-fade-in">
+          <h1 className="text-7xl font-bold text-white mb-4 tracking-tight">
+            🌍 WeGo<span className="gradient-text">AI</span>
           </h1>
-          <p className="text-xl text-purple-200 max-w-2xl mx-auto">
+          <p className="text-xl text-slate-300 max-w-2xl mx-auto leading-relaxed">
             Plan your perfect group trip with AI-powered suggestions, real-time collaboration, and smart itinerary management.
           </p>
         </div>
 
         <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
           {/* Create Trip Card */}
-          <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20 shadow-2xl">
-            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-              ✨ Create New Trip
+          <div className="glass-card rounded-3xl p-8 shadow-2xl animate-slide-up hover-lift" style={{ animationDelay: '0.1s' }}>
+            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+              <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-lg">✨</span>
+              Create New Trip
             </h2>
 
-            <form onSubmit={handleCreateTrip} className="space-y-4">
+            <form onSubmit={handleCreateTrip} className="space-y-5">
               <div>
-                <label className="block text-purple-200 text-sm mb-1">Your Name</label>
+                <label className="block text-slate-300 text-sm font-medium mb-2">Your Name</label>
                 <input
                   type="text"
                   required
-                  className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus-glow transition-smooth hover:border-violet-500/50"
                   placeholder="Enter your name"
                   value={formData.creatorName}
                   onChange={(e) => setFormData({ ...formData, creatorName: e.target.value })}
@@ -105,11 +112,11 @@ export default function HomePage() {
               </div>
 
               <div>
-                <label className="block text-purple-200 text-sm mb-1">Trip Name</label>
+                <label className="block text-slate-300 text-sm font-medium mb-2">Trip Name</label>
                 <input
                   type="text"
                   required
-                  className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus-glow transition-smooth hover:border-violet-500/50"
                   placeholder="Summer Europe Adventure"
                   value={formData.tripName}
                   onChange={(e) => setFormData({ ...formData, tripName: e.target.value })}
@@ -117,11 +124,11 @@ export default function HomePage() {
               </div>
 
               <div>
-                <label className="block text-purple-200 text-sm mb-1">Destination</label>
+                <label className="block text-slate-300 text-sm font-medium mb-2">Destination</label>
                 <input
                   type="text"
                   required
-                  className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus-glow transition-smooth hover:border-violet-500/50"
                   placeholder="Paris, France"
                   value={formData.destination}
                   onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
@@ -130,51 +137,51 @@ export default function HomePage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-purple-200 text-sm mb-1">Group Size</label>
+                  <label className="block text-slate-300 text-sm font-medium mb-2">Group Size</label>
                   <input
                     type="number"
                     min="2"
                     max="50"
-                    className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                    className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white focus-glow transition-smooth hover:border-violet-500/50"
                     value={formData.groupSize}
                     onChange={(e) => setFormData({ ...formData, groupSize: parseInt(e.target.value) })}
                   />
                 </div>
                 <div>
-                  <label className="block text-purple-200 text-sm mb-1">Age Group</label>
+                  <label className="block text-slate-300 text-sm font-medium mb-2">Age Group</label>
                   <select
-                    className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                    className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white focus-glow transition-smooth hover:border-violet-500/50"
                     value={formData.ageGroup}
                     onChange={(e) => setFormData({ ...formData, ageGroup: e.target.value as any })}
                   >
-                    <option value="kids" className="bg-gray-800">Kids</option>
-                    <option value="teens" className="bg-gray-800">Teens</option>
-                    <option value="adults" className="bg-gray-800">Adults</option>
-                    <option value="seniors" className="bg-gray-800">Seniors</option>
-                    <option value="mixed" className="bg-gray-800">Mixed</option>
+                    <option value="kids" className="bg-slate-900">Kids</option>
+                    <option value="teens" className="bg-slate-900">Teens</option>
+                    <option value="adults" className="bg-slate-900">Adults</option>
+                    <option value="seniors" className="bg-slate-900">Seniors</option>
+                    <option value="mixed" className="bg-slate-900">Mixed</option>
                   </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-purple-200 text-sm mb-1">Days</label>
+                  <label className="block text-slate-300 text-sm font-medium mb-2">Days</label>
                   <input
                     type="number"
                     min="1"
                     max="30"
-                    className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                    className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white focus-glow transition-smooth hover:border-violet-500/50"
                     value={formData.daysCount}
                     onChange={(e) => setFormData({ ...formData, daysCount: parseInt(e.target.value) })}
                   />
                 </div>
                 <div>
-                  <label className="block text-purple-200 text-sm mb-1">Nights</label>
+                  <label className="block text-slate-300 text-sm font-medium mb-2">Nights</label>
                   <input
                     type="number"
                     min="0"
                     max="30"
-                    className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                    className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white focus-glow transition-smooth hover:border-violet-500/50"
                     value={formData.nightsCount}
                     onChange={(e) => setFormData({ ...formData, nightsCount: parseInt(e.target.value) })}
                   />
@@ -184,20 +191,29 @@ export default function HomePage() {
               <button
                 type="submit"
                 disabled={isCreating}
-                className="w-full py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold rounded-xl hover:from-pink-600 hover:to-purple-700 transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                className="w-full py-4 bg-gradient-to-r from-violet-600 to-pink-600 text-white font-semibold rounded-xl hover:from-violet-500 hover:to-pink-500 transition-smooth transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-violet-500/25"
               >
-                {isCreating ? 'Creating...' : '🚀 Create Trip'}
+                {isCreating ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Creating...
+                  </span>
+                ) : '🚀 Create Trip'}
               </button>
             </form>
           </div>
 
           {/* Join Trip Card */}
-          <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20 shadow-2xl flex flex-col">
-            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-              🔗 Join Existing Trip
+          <div className="glass-card rounded-3xl p-8 shadow-2xl flex flex-col animate-slide-up hover-lift" style={{ animationDelay: '0.2s' }}>
+            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+              <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-lg">🔗</span>
+              Join Existing Trip
             </h2>
 
-            <p className="text-purple-200 mb-6">
+            <p className="text-slate-300 mb-8">
               Have an invite code? Enter it below to join your friends' trip.
             </p>
 
@@ -205,7 +221,7 @@ export default function HomePage() {
               <div className="space-y-4">
                 <input
                   type="text"
-                  className="w-full px-6 py-4 rounded-xl bg-white/10 border border-white/20 text-white text-center text-2xl tracking-widest uppercase placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  className="w-full px-6 py-5 rounded-2xl bg-white/5 border border-white/10 text-white text-center text-2xl tracking-[0.3em] uppercase placeholder-slate-600 focus-glow transition-smooth hover:border-cyan-500/50 font-mono"
                   placeholder="ABC12345"
                   maxLength={8}
                   value={joinCode}
@@ -215,21 +231,33 @@ export default function HomePage() {
                 <button
                   onClick={handleJoinTrip}
                   disabled={joinCode.length < 6}
-                  className="w-full py-4 bg-white/20 text-white font-bold rounded-xl hover:bg-white/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-white/20"
+                  className="w-full py-4 bg-white/10 text-white font-semibold rounded-xl hover:bg-white/20 transition-smooth disabled:opacity-30 disabled:cursor-not-allowed border border-white/10 hover:border-cyan-500/50"
                 >
                   Join Trip →
                 </button>
               </div>
             </div>
 
-            <div className="mt-8 p-4 bg-white/5 rounded-xl border border-white/10">
-              <h3 className="text-white font-semibold mb-2">✨ Features</h3>
-              <ul className="text-purple-200 text-sm space-y-1">
-                <li>• AI-powered suggestions with @AI mentions</li>
-                <li>• Real-time group chat & collaboration</li>
-                <li>• Democratic voting on activities</li>
-                <li>• Smart clash detection</li>
-                <li>• Auto travel time calculations</li>
+            <div className="mt-8 p-5 bg-gradient-to-br from-violet-500/10 to-cyan-500/10 rounded-2xl border border-white/5">
+              <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
+                <span className="gradient-text">✨</span> Features
+              </h3>
+              <ul className="text-slate-400 text-sm space-y-2">
+                <li className="flex items-center gap-2">
+                  <span className="text-violet-400">•</span> AI-powered suggestions with @AI mentions
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-cyan-400">•</span> Real-time group chat & collaboration
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-pink-400">•</span> Democratic voting on activities
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-emerald-400">•</span> Smart clash detection
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-amber-400">•</span> Auto travel time calculations
+                </li>
               </ul>
             </div>
           </div>
