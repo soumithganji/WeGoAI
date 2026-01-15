@@ -44,12 +44,10 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const tripId = uuidv4();
         const inviteCode = uuidv4().slice(0, 8).toUpperCase();
         const creatorId = uuidv4();
 
         const trip = new Trip({
-            _id: tripId,
             name,
             settings: {
                 destination: settings.destination,
@@ -75,7 +73,7 @@ export async function POST(request: NextRequest) {
         await trip.save();
 
         return NextResponse.json({
-            id: tripId,
+            id: trip._id,
             inviteCode,
             creatorId,
             trip
