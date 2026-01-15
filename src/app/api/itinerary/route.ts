@@ -37,12 +37,21 @@ export async function POST(request: NextRequest) {
         item.votes.no = removeVote(item.votes.no, userId);
 
         // If voting YES and item has a group, remove YES votes from other items in the same group
+        // Use direct MongoDB update for reliability
         if (vote === 'yes' && item.groupId) {
-            trip.itinerary.forEach((otherItem: any) => {
-                if (otherItem.id !== itemId && otherItem.groupId === item.groupId) {
-                    otherItem.votes.yes = removeVote(otherItem.votes.yes, userId);
-                }
-            });
+            // Get IDs of other items in the same group
+            const otherGroupItemIds = trip.itinerary
+                .filter((i: any) => i.id !== itemId && i.groupId === item.groupId)
+                .map((i: any) => i.id);
+
+            // Use individual updates for each item (more reliable than arrayFilters)
+            for (const otherId of otherGroupItemIds) {
+                await Trip.updateOne(
+                    { _id: tripId, 'itinerary.id': otherId },
+                    { $pull: { 'itinerary.$.votes.yes': userId } }
+                );
+            }
+            console.log(`Removed votes from ${otherGroupItemIds.length} other items in group for user ${userId}`);
         }
 
         // Add new vote
@@ -52,16 +61,35 @@ export async function POST(request: NextRequest) {
             item.votes.no.push(userId);
         }
 
-        // Check if all members have voted yes
+        // Check if all members have voted yes for this item
         const memberCount = trip.members.length;
         if (item.votes.yes.length === memberCount) {
             item.status = 'approved';
+
+            // If this item is in a group, remove all other items in the group
+            if (item.groupId) {
+                trip.itinerary = trip.itinerary.filter((otherItem: any) =>
+                    otherItem.id === itemId || otherItem.groupId !== item.groupId
+                );
+                // Clear the groupId since it's now the only one
+                item.groupId = undefined;
+            }
         } else if (item.votes.no.length > 0 && item.votes.yes.length + item.votes.no.length === memberCount) {
             // All voted but not unanimous yes - mark as rejected if any no votes
             item.status = 'rejected';
         }
 
-        await trip.save();
+        // Save the current item's vote changes
+        await Trip.updateOne(
+            { _id: tripId, 'itinerary.id': itemId },
+            {
+                $set: {
+                    'itinerary.$.votes': item.votes,
+                    'itinerary.$.status': item.status,
+                    'itinerary.$.groupId': item.groupId
+                }
+            }
+        );
 
         return NextResponse.json({
             item,

@@ -100,6 +100,9 @@ export async function POST(request: NextRequest) {
                     }
                 }
 
+                console.log('AI Result:', finalContent.substring(0, 200));
+                console.log('JSON Match found:', !!jsonString);
+
                 if (jsonString) {
                     try {
                         const actionData = JSON.parse(jsonString);

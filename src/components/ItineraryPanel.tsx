@@ -169,7 +169,7 @@ export default function ItineraryPanel({
             )}
 
             {/* Itinerary List */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-8">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 space-y-8">
                 {groupedByDay.map(({ day, items }) => {
                     // Group items by groupId for display
                     const processedItems: (ItineraryItem | { type: 'group', id: string, items: ItineraryItem[] })[] = [];
@@ -205,49 +205,83 @@ export default function ItineraryPanel({
 
                                     {processedItems.map((entry, index) => {
                                         if ('type' in entry && entry.type === 'group') {
-                                            // Render Option Group
+                                            // Get first item's time for display
+                                            const firstItem = entry.items[0];
+                                            const timeDisplay = firstItem?.startTime || 'TBD';
+
+                                            // Render Option Group - Horizontal Scrollable
                                             return (
-                                                <div key={entry.id} className="flex gap-6 relative mb-8 group animate-slide-up ml-[68px] pl-4 border-l-2 border-dashed border-pink-500/30">
-                                                    <div className="absolute -left-[27px] top-0 px-2 py-1 bg-pink-500/20 rounded text-[10px] text-pink-400 font-bold uppercase tracking-wider -rotate-90 origin-right translate-y-8">
-                                                        Choose One
+                                                <div key={entry.id} className="flex gap-6 relative mb-8 group animate-slide-up">
+                                                    {/* Time Column */}
+                                                    <div className="w-[45px] text-right pt-4 flex-shrink-0">
+                                                        <div className="text-white font-bold leading-none text-sm">{timeDisplay}</div>
+                                                        <div className="text-[10px] text-slate-500 mt-1">{firstItem?.endTime}</div>
                                                     </div>
-                                                    <div className="flex-1 space-y-4">
-                                                        {entry.items.map(item => {
-                                                            const config = getStatusConfig(item.status);
-                                                            const isUserSelected = item.votes.yes.includes(userId);
 
-                                                            return (
-                                                                <div key={item.id} className={`p-4 rounded-xl border ${isUserSelected ? 'bg-pink-500/10 border-pink-500/50' : 'bg-white/5 border-white/10'} hover:border-pink-500/30 transition-all`}>
-                                                                    <div className="flex justify-between items-start gap-3">
-                                                                        <div className="flex-1">
-                                                                            <h4 className="text-white font-medium text-base">{item.title}</h4>
-                                                                            <p className="text-xs text-slate-400 mt-1">{item.description}</p>
-                                                                            {item.location && <p className="text-xs text-slate-500 mt-1">📍 {item.location}</p>}
-                                                                            <p className="text-xs text-slate-500">🕒 {item.startTime} - {item.endTime}</p>
-                                                                        </div>
+                                                    {/* Timeline Dot */}
+                                                    <div className="absolute left-[56px] top-[18px] w-2.5 h-2.5 rounded-full bg-pink-500 ring-4 ring-slate-900 z-10 shadow-[0_0_10px_rgba(236,72,153,0.5)]" />
 
-                                                                        {/* Vote Button */}
-                                                                        <button
+                                                    {/* Options Container */}
+                                                    <div className="flex-1 ml-4 min-w-0 overflow-hidden">
+                                                        {/* Header */}
+                                                        <div className="flex items-center gap-2 mb-3">
+                                                            <span className="px-2 py-1 bg-pink-500/20 rounded text-[10px] text-pink-400 font-bold uppercase tracking-wider">
+                                                                Choose One
+                                                            </span>
+                                                            <span className="text-xs text-slate-500">{entry.items.length} options</span>
+                                                        </div>
+
+                                                        {/* Horizontal Scrollable Options */}
+                                                        <div className="overflow-x-auto pb-2" style={{ scrollbarWidth: 'thin' }}>
+                                                            <div className="flex gap-3" style={{ width: 'max-content' }}>
+                                                                {entry.items.map(item => {
+                                                                    const isUserSelected = item.votes.yes.includes(userId);
+
+                                                                    return (
+                                                                        <div
+                                                                            key={item.id}
                                                                             onClick={() => onVote(item.id, isUserSelected ? 'no' : 'yes')}
-                                                                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isUserSelected
-                                                                                ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg shadow-pink-500/30 scale-110'
-                                                                                : 'bg-white/10 text-slate-400 hover:bg-white/20'}`}
+                                                                            className={`w-[200px] flex-shrink-0 p-4 rounded-xl border cursor-pointer transition-all duration-300 ${isUserSelected
+                                                                                ? 'bg-gradient-to-br from-pink-500/20 to-rose-500/20 border-pink-500 shadow-lg shadow-pink-500/20 scale-[1.02]'
+                                                                                : 'bg-white/5 border-white/10 hover:border-pink-500/50 hover:bg-white/10'
+                                                                                }`}
                                                                         >
-                                                                            {isUserSelected ? '✓' : ''}
-                                                                        </button>
-                                                                    </div>
-                                                                    {/* Vote Count */}
-                                                                    <div className="mt-2 flex items-center gap-2">
-                                                                        <div className="flex -space-x-1.5">
-                                                                            {item.votes.yes.slice(0, 3).map((v, i) => (
-                                                                                <div key={i} className="w-4 h-4 rounded-full bg-slate-700 border border-slate-800" />
-                                                                            ))}
+                                                                            {/* Selected Indicator */}
+                                                                            {isUserSelected && (
+                                                                                <div className="absolute -top-2 -right-2 w-6 h-6 bg-pink-500 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg">
+                                                                                    ✓
+                                                                                </div>
+                                                                            )}
+
+                                                                            <h4 className="text-white font-medium text-sm leading-tight">{item.title}</h4>
+                                                                            <p className="text-[11px] text-slate-400 mt-1.5 line-clamp-2">{item.description}</p>
+
+                                                                            {item.location && (
+                                                                                <p className="text-[10px] text-slate-500 mt-2 flex items-center gap-1 truncate">
+                                                                                    <span>📍</span> {item.location}
+                                                                                </p>
+                                                                            )}
+
+                                                                            {/* Vote Count */}
+                                                                            <div className="mt-3 pt-2 border-t border-white/10 flex items-center justify-between">
+                                                                                <div className="flex items-center gap-1.5">
+                                                                                    <div className="flex -space-x-1">
+                                                                                        {item.votes.yes.slice(0, 3).map((v, i) => (
+                                                                                            <div key={i} className="w-4 h-4 rounded-full bg-gradient-to-br from-pink-400 to-rose-400 border-2 border-slate-900" />
+                                                                                        ))}
+                                                                                    </div>
+                                                                                    <span className="text-[10px] text-slate-400">{item.votes.yes.length} votes</span>
+                                                                                </div>
+
+                                                                                {!isUserSelected && (
+                                                                                    <span className="text-[10px] text-pink-400 font-medium">Tap to vote</span>
+                                                                                )}
+                                                                            </div>
                                                                         </div>
-                                                                        <span className="text-[10px] text-slate-500">{item.votes.yes.length} votes</span>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             );
@@ -346,11 +380,12 @@ export default function ItineraryPanel({
                                         }
                                     })}
                                 </div>
-                            )}
+                            )
+                            }
                         </div>
                     );
                 })}
             </div>
-        </div>
+        </div >
     );
 }
