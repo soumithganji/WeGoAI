@@ -91,6 +91,7 @@ export async function POST(request: NextRequest) {
                 }
             } catch (aiError) {
                 console.error('AI response error:', aiError);
+                console.error('⚠️ NOTE: For local development, make sure the AI server is running: npm run dev:ai');
                 // Continue without AI response
             }
         }

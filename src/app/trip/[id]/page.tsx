@@ -21,6 +21,7 @@ export default function TripPage({ params }: TripPageProps) {
     const [loading, setLoading] = useState(true);
     const [showItinerary, setShowItinerary] = useState(true);
     const [showSettings, setShowSettings] = useState(false);
+    const [showCopied, setShowCopied] = useState(false);
 
     useEffect(() => {
         const loadData = async () => {
@@ -165,7 +166,8 @@ export default function TripPage({ params }: TripPageProps) {
     const copyInviteLink = () => {
         const link = `${window.location.origin}/trip/${tripId}/join?code=${trip?.inviteCode}`;
         navigator.clipboard.writeText(link);
-        alert('Invite link copied to clipboard!');
+        setShowCopied(true);
+        setTimeout(() => setShowCopied(false), 2000);
     };
 
     if (loading) {
@@ -212,19 +214,27 @@ export default function TripPage({ params }: TripPageProps) {
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
-                    <button
-                        onClick={copyInviteLink}
-                        className="px-4 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:from-violet-500 hover:to-purple-500 transition-smooth flex items-center gap-2 shadow-lg shadow-violet-500/20"
-                    >
-                        <span>📋</span>
-                        <span className="hidden sm:inline">Code:</span>
-                        <span className="font-mono tracking-wider">{trip.inviteCode}</span>
-                    </button>
+                    <div className="relative">
+                        <button
+                            onClick={copyInviteLink}
+                            className="px-4 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl text-sm font-medium hover:from-violet-500 hover:to-purple-500 transition-smooth flex items-center gap-2 shadow-lg shadow-violet-500/20"
+                        >
+                            <span>📋</span>
+                            <span className="hidden sm:inline">Code:</span>
+                            <span className="font-mono tracking-wider">{trip.inviteCode}</span>
+                        </button>
+                        {showCopied && (
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 bg-emerald-500 text-white text-xs font-medium rounded-lg shadow-lg animate-fade-in whitespace-nowrap">
+                                ✓ Code Copied!
+                                <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-emerald-500 rotate-45" />
+                            </div>
+                        )}
+                    </div>
                     <button
                         onClick={() => setShowSettings(!showSettings)}
                         className={`px-4 py-2 rounded-xl text-sm font-medium transition-smooth flex items-center gap-2 ${showSettings
-                                ? 'bg-violet-600 text-white'
-                                : 'bg-white/10 text-white hover:bg-white/20 border border-white/10'
+                            ? 'bg-violet-600 text-white'
+                            : 'bg-white/10 text-white hover:bg-white/20 border border-white/10'
                             }`}
                     >
                         ⚙️ <span className="hidden sm:inline">Settings</span>

@@ -182,83 +182,98 @@ export default function ItineraryPanel({
                         {items.length === 0 ? (
                             <p className="text-slate-600 text-sm ml-[52px] py-4 border-l-2 border-dashed border-slate-800 pl-6">No activities yet</p>
                         ) : (
-                            <div className="space-y-3 ml-5 border-l-2 border-violet-500/30 pl-6">
+                            <div className="relative mt-6">
+                                {/* Continuous vertical line */}
+                                <div className="absolute left-[60px] top-2 bottom-6 w-0.5 bg-violet-500/30" />
+
                                 {items.map((item, index) => {
                                     const config = getStatusConfig(item.status);
                                     return (
                                         <div
                                             key={item.id}
-                                            className={`p-4 rounded-xl border ${config.bg} ${config.border} hover-lift shadow-lg ${config.glow} relative`}
+                                            className="flex gap-6 relative mb-6 group animate-slide-up"
                                             style={{ animationDelay: `${index * 0.05}s` }}
                                         >
-                                            {/* Timeline dot */}
-                                            <div className="absolute -left-[31px] top-4 w-4 h-4 rounded-full bg-violet-500 border-4 border-slate-900" />
-
-                                            <div className="flex justify-between items-start gap-3">
-                                                <div className="flex-1">
-                                                    <h4 className="text-white font-medium text-base">{item.title}</h4>
-                                                    {item.startTime && (
-                                                        <p className="text-sm text-slate-400 mt-1 flex items-center gap-1.5">
-                                                            <span className="text-cyan-400">🕐</span> {item.startTime} - {item.endTime}
-                                                        </p>
-                                                    )}
-                                                    {item.location && (
-                                                        <p className="text-sm text-slate-400 mt-0.5 flex items-center gap-1.5">
-                                                            <span className="text-pink-400">📍</span> {item.location}
-                                                        </p>
-                                                    )}
-                                                    {item.travelTimeFromPrevious && (
-                                                        <p className="text-sm text-slate-400 mt-0.5 flex items-center gap-1.5">
-                                                            <span className="text-blue-400">🚗</span> {item.travelTimeFromPrevious} min travel
-                                                        </p>
-                                                    )}
-                                                </div>
-                                                <div className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${config.badge} uppercase tracking-wide`}>
-                                                    {item.status}
-                                                </div>
+                                            {/* Time Column */}
+                                            <div className="w-[45px] text-right pt-[18px] flex-shrink-0">
+                                                {item.startTime ? (
+                                                    <>
+                                                        <div className="text-white font-bold leading-none text-sm">{item.startTime}</div>
+                                                        <div className="text-[10px] text-slate-500 mt-1">{item.endTime}</div>
+                                                    </>
+                                                ) : (
+                                                    <div className="text-slate-600 text-[10px] italic pt-1">TBD</div>
+                                                )}
                                             </div>
 
-                                            {/* Voting */}
-                                            {item.status === 'pending' && (
-                                                <div className="mt-4 pt-4 border-t border-white/10">
-                                                    {/* Progress bar */}
-                                                    <div className="mb-3">
-                                                        <div className="flex justify-between text-xs text-slate-400 mb-1.5">
-                                                            <span>{item.votes.yes.length} of {memberCount} approved</span>
-                                                            <span>{getVotePercentage(item)}%</span>
-                                                        </div>
-                                                        <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                                                            <div
-                                                                className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500"
-                                                                style={{ width: `${getVotePercentage(item)}%` }}
-                                                            />
-                                                        </div>
-                                                    </div>
+                                            {/* Timeline Dot */}
+                                            <div className="absolute left-[56px] top-[22px] w-2.5 h-2.5 rounded-full bg-violet-500 ring-4 ring-slate-900 z-10 group-hover:scale-125 transition-transform duration-300 shadow-[0_0_10px_rgba(139,92,246,0.5)]" />
 
-                                                    <div className="flex items-center justify-end gap-2">
-                                                        {!hasVoted(item) ? (
-                                                            <>
-                                                                <button
-                                                                    onClick={() => onVote(item.id, 'yes')}
-                                                                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-smooth text-sm font-medium flex items-center gap-1.5"
-                                                                >
-                                                                    <span>✓</span> Yes
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => onVote(item.id, 'no')}
-                                                                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-smooth text-sm font-medium flex items-center gap-1.5"
-                                                                >
-                                                                    <span>✗</span> No
-                                                                </button>
-                                                            </>
-                                                        ) : (
-                                                            <span className="text-sm text-slate-400 px-3 py-1.5 bg-white/5 rounded-lg">
-                                                                {item.votes.yes.includes(userId) ? '✓ Voted Yes' : '✗ Voted No'}
-                                                            </span>
+                                            {/* Event Card */}
+                                            <div
+                                                className={`flex-1 p-4 rounded-xl border ${config.bg} ${config.border} hover-lift shadow-lg ${config.glow}`}
+                                            >
+                                                <div className="flex justify-between items-start gap-3">
+                                                    <div className="flex-1">
+                                                        <h4 className="text-white font-medium text-base">{item.title}</h4>
+                                                        {item.location && (
+                                                            <p className="text-sm text-slate-400 mt-1 flex items-center gap-1.5">
+                                                                <span className="text-pink-400">📍</span> {item.location}
+                                                            </p>
+                                                        )}
+                                                        {item.travelTimeFromPrevious && (
+                                                            <p className="text-sm text-slate-400 mt-0.5 flex items-center gap-1.5">
+                                                                <span className="text-blue-400">🚗</span> {item.travelTimeFromPrevious} min travel
+                                                            </p>
                                                         )}
                                                     </div>
+                                                    <div className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${config.badge} uppercase tracking-wide`}>
+                                                        {item.status}
+                                                    </div>
                                                 </div>
-                                            )}
+
+                                                {/* Voting */}
+                                                {item.status === 'pending' && (
+                                                    <div className="mt-4 pt-4 border-t border-white/10">
+                                                        {/* Progress bar */}
+                                                        <div className="mb-3">
+                                                            <div className="flex justify-between text-[10px] text-slate-400 mb-1.5 uppercase tracking-wider">
+                                                                <span>{item.votes.yes.length}/{memberCount} VOTES</span>
+                                                                <span>{getVotePercentage(item)}%</span>
+                                                            </div>
+                                                            <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                                                                <div
+                                                                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500"
+                                                                    style={{ width: `${getVotePercentage(item)}%` }}
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            {!hasVoted(item) ? (
+                                                                <>
+                                                                    <button
+                                                                        onClick={() => onVote(item.id, 'yes')}
+                                                                        className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-smooth text-xs font-medium flex items-center gap-1"
+                                                                    >
+                                                                        <span>✓</span>
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => onVote(item.id, 'no')}
+                                                                        className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-smooth text-xs font-medium flex items-center gap-1"
+                                                                    >
+                                                                        <span>✗</span>
+                                                                    </button>
+                                                                </>
+                                                            ) : (
+                                                                <span className="text-xs text-slate-400 font-medium">
+                                                                    {item.votes.yes.includes(userId) ? '✓ Voted Yes' : '✗ Voted No'}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     );
                                 })}

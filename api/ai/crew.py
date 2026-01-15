@@ -15,8 +15,13 @@ llm = ChatNVIDIA(
     base_url="https://integrate.api.nvidia.com/v1"
 )
 
+from crewai.tools import tool
+
 # Tool 1: FREE web search (DuckDuckGo)
-search_tool = DuckDuckGoSearchRun()
+@tool("Web Search")
+def search_tool(query: str):
+    """Search for information on the internet. Useful for finding travel options, restaurants, and attractions."""
+    return DuckDuckGoSearchRun().run(query)
 
 # Tool 2: Travel time calculator (OpenRouteService)
 def get_travel_time(origin: str, destination: str) -> str:
