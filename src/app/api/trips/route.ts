@@ -44,7 +44,13 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const inviteCode = uuidv4().slice(0, 8).toUpperCase();
+        // Generate a readable invite code based on trip name
+        // Format: First 4 letters of trip name (no spaces) + 3 random digits
+        // Example: "Paris Trip" → "PARI123", "Beach Vacation" → "BEAC456"
+        const cleanName = name.replace(/[^a-zA-Z]/g, '').toUpperCase();
+        const namePart = cleanName.substring(0, 4).padEnd(4, 'X'); // Pad with X if name is short
+        const numberPart = Math.floor(100 + Math.random() * 900).toString(); // 3 digits (100-999)
+        const inviteCode = `${namePart}${numberPart}`;
         const creatorId = uuidv4();
 
         const trip = new Trip({

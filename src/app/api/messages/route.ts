@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if message mentions AI
-        const isAIMention = content.toLowerCase().includes('@ai');
+        const isAIMention = content.toLowerCase().includes('@weai');
 
         const message = new Message({
             tripId,
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        query: content.replace(/@ai/gi, '').trim(),
+                        query: content.replace(/@weai/gi, '').trim(),
                         tripContext: trip,
                         chatHistory: recentMessages.reverse()
                     }),

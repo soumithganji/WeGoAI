@@ -44,7 +44,7 @@ export default function ChatInterface({
     };
 
     const handleAIMention = () => {
-        setInput(input + '@AI ');
+        setInput(input + '@weai ');
         inputRef.current?.focus();
     };
 
@@ -56,7 +56,7 @@ export default function ChatInterface({
                     <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-sm">💬</span>
                     Group Chat
                 </h2>
-                <p className="text-sm text-slate-500 mt-1">Type <span className="text-violet-400 font-medium">@AI</span> to ask for suggestions</p>
+                <p className="text-sm text-slate-500 mt-1">Type <span className="text-violet-400 font-medium">@weai</span> to ask for suggestions</p>
             </div>
 
             {/* Messages */}
@@ -68,7 +68,7 @@ export default function ChatInterface({
                         </div>
                         <p className="text-slate-300 font-medium">Start chatting with your group!</p>
                         <p className="text-sm text-slate-500 mt-2">
-                            Tip: Type <span className="text-violet-400 font-medium">@AI</span> to get AI suggestions
+                            Tip: Type <span className="text-violet-400 font-medium">@weai</span> to get AI suggestions
                         </p>
                     </div>
                 )}
@@ -137,7 +137,7 @@ export default function ChatInterface({
                         onClick={handleAIMention}
                         className="px-4 py-2.5 bg-gradient-to-r from-violet-600 to-pink-600 text-white rounded-xl hover:from-violet-500 hover:to-pink-500 transition-smooth text-sm font-semibold shadow-lg shadow-violet-500/20"
                     >
-                        @AI
+                        @weai
                     </button>
                     <input
                         ref={inputRef}

@@ -287,7 +287,7 @@ export default function TripPage({ params }: TripPageProps) {
     return (
         <div className="h-screen bg-slate-950 flex flex-col">
             {/* Header */}
-            <header className="bg-gradient-to-r from-slate-900/90 via-indigo-950/90 to-purple-950/90 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex items-center justify-between animate-fade-in">
+            <header className="relative z-20 bg-gradient-to-r from-slate-900/90 via-indigo-950/90 to-purple-950/90 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex items-center justify-between animate-fade-in">
                 <div className="flex items-center gap-5">
                     <h1 className="text-xl font-bold text-white flex items-center gap-2">
                         <span className="text-2xl">🌍</span>
@@ -313,7 +313,7 @@ export default function TripPage({ params }: TripPageProps) {
                             <span className="font-mono tracking-wider">{trip.inviteCode}</span>
                         </button>
                         {showCopied && (
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 bg-emerald-500 text-white text-xs font-medium rounded-lg shadow-lg animate-fade-in whitespace-nowrap">
+                            <div className="absolute z-[60] top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 bg-emerald-500 text-white text-xs font-medium rounded-lg shadow-lg animate-fade-in whitespace-nowrap">
                                 ✓ Code Copied!
                                 <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-emerald-500 rotate-45" />
                             </div>

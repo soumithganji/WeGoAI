@@ -21,8 +21,6 @@ export default function HomePage() {
     creatorName: '',
     destination: '',
     destinationCoords: null as { lat: number; lon: number } | null,
-    hotel: '',
-    airport: '',
     groupSize: 4,
     daysCount: 3,
     nightsCount: 2,
@@ -31,7 +29,7 @@ export default function HomePage() {
 
   // Autocomplete state
   const [suggestions, setSuggestions] = useState<PlaceResult[]>([]);
-  const [activeField, setActiveField] = useState<'destination' | 'hotel' | 'airport' | null>(null);
+  const [activeField, setActiveField] = useState<'destination' | null>(null);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -58,37 +56,27 @@ export default function HomePage() {
     }
   };
 
-  // Debounced input handler
-  const handleInputChange = (field: 'destination' | 'hotel' | 'airport', value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    setActiveField(field);
+  // Debounced input handler for destination
+  const handleInputChange = (value: string) => {
+    setFormData(prev => ({ ...prev, destination: value }));
+    setActiveField('destination');
 
     // Clear previous debounce
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     // Debounce the API call
     debounceRef.current = setTimeout(() => {
-      const type = field === 'destination' ? 'city' : field;
-      const near = field !== 'destination' && formData.destinationCoords
-        ? `${formData.destinationCoords.lat},${formData.destinationCoords.lon}`
-        : undefined;
-      fetchSuggestions(value, type, near);
+      fetchSuggestions(value, 'city');
     }, 300);
   };
 
-  // Select a suggestion
-  const selectSuggestion = (place: PlaceResult, field: 'destination' | 'hotel' | 'airport') => {
-    if (field === 'destination') {
-      setFormData(prev => ({
-        ...prev,
-        destination: place.name,
-        destinationCoords: { lat: place.lat, lon: place.lon },
-        hotel: '', // Clear hotel/airport when destination changes
-        airport: '',
-      }));
-    } else {
-      setFormData(prev => ({ ...prev, [field]: place.name }));
-    }
+  // Select a destination suggestion
+  const selectSuggestion = (place: PlaceResult) => {
+    setFormData(prev => ({
+      ...prev,
+      destination: place.name,
+      destinationCoords: { lat: place.lat, lon: place.lon },
+    }));
     setSuggestions([]);
     setActiveField(null);
   };
@@ -106,8 +94,6 @@ export default function HomePage() {
           creatorName: formData.creatorName,
           settings: {
             destination: formData.destination,
-            hotel: formData.hotel,
-            airport: formData.airport,
             groupSize: formData.groupSize,
             daysCount: formData.daysCount,
             nightsCount: formData.nightsCount,
@@ -210,7 +196,7 @@ export default function HomePage() {
                   className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus-glow transition-smooth hover:border-violet-500/50"
                   placeholder="Start typing a city..."
                   value={formData.destination}
-                  onChange={(e) => handleInputChange('destination', e.target.value)}
+                  onChange={(e) => handleInputChange(e.target.value)}
                   onFocus={() => setActiveField('destination')}
                   onBlur={() => setTimeout(() => activeField === 'destination' && setActiveField(null), 200)}
                 />
@@ -221,7 +207,7 @@ export default function HomePage() {
                         key={place.id}
                         type="button"
                         className="w-full px-4 py-3 text-left text-white hover:bg-violet-500/20 transition-colors first:rounded-t-xl last:rounded-b-xl"
-                        onClick={() => selectSuggestion(place, 'destination')}
+                        onClick={() => selectSuggestion(place)}
                       >
                         <div className="font-medium">{place.name}</div>
                         <div className="text-xs text-slate-400 truncate">{place.displayName}</div>
@@ -231,67 +217,7 @@ export default function HomePage() {
                 )}
               </div>
 
-              {/* Hotel with Autocomplete - only show if destination is selected */}
-              {formData.destinationCoords && (
-                <div className="relative">
-                  <label className="block text-slate-300 text-sm font-medium mb-2">Hotel (Optional)</label>
-                  <input
-                    type="text"
-                    className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus-glow transition-smooth hover:border-violet-500/50"
-                    placeholder="Search for a hotel..."
-                    value={formData.hotel}
-                    onChange={(e) => handleInputChange('hotel', e.target.value)}
-                    onFocus={() => setActiveField('hotel')}
-                    onBlur={() => setTimeout(() => activeField === 'hotel' && setActiveField(null), 200)}
-                  />
-                  {activeField === 'hotel' && suggestions.length > 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-white/10 rounded-xl shadow-xl max-h-60 overflow-y-auto">
-                      {suggestions.map((place) => (
-                        <button
-                          key={place.id}
-                          type="button"
-                          className="w-full px-4 py-3 text-left text-white hover:bg-cyan-500/20 transition-colors first:rounded-t-xl last:rounded-b-xl"
-                          onClick={() => selectSuggestion(place, 'hotel')}
-                        >
-                          <div className="font-medium">{place.name}</div>
-                          <div className="text-xs text-slate-400 truncate">{place.displayName}</div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
 
-              {/* Airport with Autocomplete - only show if destination is selected */}
-              {formData.destinationCoords && (
-                <div className="relative">
-                  <label className="block text-slate-300 text-sm font-medium mb-2">Airport (Optional)</label>
-                  <input
-                    type="text"
-                    className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus-glow transition-smooth hover:border-violet-500/50"
-                    placeholder="Search for an airport..."
-                    value={formData.airport}
-                    onChange={(e) => handleInputChange('airport', e.target.value)}
-                    onFocus={() => setActiveField('airport')}
-                    onBlur={() => setTimeout(() => activeField === 'airport' && setActiveField(null), 200)}
-                  />
-                  {activeField === 'airport' && suggestions.length > 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-white/10 rounded-xl shadow-xl max-h-60 overflow-y-auto">
-                      {suggestions.map((place) => (
-                        <button
-                          key={place.id}
-                          type="button"
-                          className="w-full px-4 py-3 text-left text-white hover:bg-pink-500/20 transition-colors first:rounded-t-xl last:rounded-b-xl"
-                          onClick={() => selectSuggestion(place, 'airport')}
-                        >
-                          <div className="font-medium">{place.name}</div>
-                          <div className="text-xs text-slate-400 truncate">{place.displayName}</div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -308,15 +234,15 @@ export default function HomePage() {
                 <div>
                   <label className="block text-slate-300 text-sm font-medium mb-2">Age Group</label>
                   <select
-                    className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white focus-glow transition-smooth hover:border-violet-500/50"
+                    className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white focus-glow transition-smooth hover:border-violet-500/50 appearance-none cursor-pointer"
                     value={formData.ageGroup}
                     onChange={(e) => setFormData({ ...formData, ageGroup: e.target.value as any })}
                   >
-                    <option value="kids" className="bg-slate-900">Kids</option>
-                    <option value="teens" className="bg-slate-900">Teens</option>
-                    <option value="adults" className="bg-slate-900">Adults</option>
-                    <option value="seniors" className="bg-slate-900">Seniors</option>
-                    <option value="mixed" className="bg-slate-900">Mixed</option>
+                    <option value="kids" className="bg-slate-900 text-white">Kids</option>
+                    <option value="teens" className="bg-slate-900 text-white">Teens</option>
+                    <option value="adults" className="bg-slate-900 text-white">Adults</option>
+                    <option value="seniors" className="bg-slate-900 text-white">Seniors</option>
+                    <option value="mixed" className="bg-slate-900 text-white">Mixed</option>
                   </select>
                 </div>
               </div>
@@ -402,7 +328,7 @@ export default function HomePage() {
               </h3>
               <ul className="text-slate-400 text-sm space-y-2">
                 <li className="flex items-center gap-2">
-                  <span className="text-violet-400">•</span> AI-powered suggestions with @AI mentions
+                  <span className="text-violet-400">•</span> AI-powered suggestions with @weai mentions
                 </li>
                 <li className="flex items-center gap-2">
                   <span className="text-cyan-400">•</span> Real-time group chat & collaboration
