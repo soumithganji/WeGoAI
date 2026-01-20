@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import ChatInterface from '@/components/ChatInterface';
 import ItineraryPanel from '@/components/ItineraryPanel';
@@ -22,6 +22,16 @@ export default function TripPage({ params }: TripPageProps) {
     const [showItinerary, setShowItinerary] = useState(true);
     const [showSettings, setShowSettings] = useState(false);
     const [showCopied, setShowCopied] = useState(false);
+
+    // Autocomplete states
+    const [airportSuggestions, setAirportSuggestions] = useState<string[]>([]);
+    const [hotelSuggestions, setHotelSuggestions] = useState<string[]>([]);
+    const [showAirportDropdown, setShowAirportDropdown] = useState(false);
+    const [showHotelDropdown, setShowHotelDropdown] = useState(false);
+    const [airportValue, setAirportValue] = useState('');
+    const [hotelValue, setHotelValue] = useState('');
+    const airportRef = useRef<HTMLDivElement>(null);
+    const hotelRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const loadData = async () => {
@@ -74,6 +84,44 @@ export default function TripPage({ params }: TripPageProps) {
 
         return () => clearInterval(interval);
     }, [tripId, router]);
+
+    // Fetch airport and hotel suggestions when trip loads
+    useEffect(() => {
+        const fetchSuggestions = async () => {
+            if (!trip?.settings?.destination) return;
+
+            try {
+                const res = await fetch(`/api/suggestions?destination=${encodeURIComponent(trip.settings.destination)}`);
+                const data = await res.json();
+
+                if (data.airports) setAirportSuggestions(data.airports);
+                if (data.hotels) setHotelSuggestions(data.hotels);
+
+                // Initialize input values with existing settings
+                setAirportValue(trip.settings.airport || '');
+                setHotelValue(trip.settings.hotel || '');
+            } catch (error) {
+                console.error('Error fetching suggestions:', error);
+            }
+        };
+
+        fetchSuggestions();
+    }, [trip?.settings?.destination]);
+
+    // Handle click outside to close dropdowns
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (airportRef.current && !airportRef.current.contains(event.target as Node)) {
+                setShowAirportDropdown(false);
+            }
+            if (hotelRef.current && !hotelRef.current.contains(event.target as Node)) {
+                setShowHotelDropdown(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const handleSendMessage = async (content: string) => {
         try {
@@ -248,51 +296,170 @@ export default function TripPage({ params }: TripPageProps) {
                 </div>
             </header>
 
-            {/* Settings Panel */}
+            {/* Settings Modal */}
             {showSettings && (
-                <div className="bg-slate-900/80 backdrop-blur-xl border-b border-white/10 p-5 animate-slide-up">
-                    <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-lg bg-violet-500/20 flex items-center justify-center text-sm">⚙️</span>
-                        Trip Settings
-                    </h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div>
-                            <label className="block text-slate-400 text-sm mb-2">Landing Time</label>
-                            <input
-                                type="datetime-local"
-                                defaultValue={trip.settings.landingTime}
-                                onChange={(e) => handleUpdateSettings({ landingTime: e.target.value })}
-                                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus-glow transition-smooth"
-                            />
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    {/* Backdrop */}
+                    <div
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        onClick={() => setShowSettings(false)}
+                    />
+
+                    {/* Modal Content */}
+                    <div className="relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto animate-fade-in">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between p-6 border-b border-white/10">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-lg shadow-lg shadow-violet-500/20">⚙️</span>
+                                Trip Settings
+                            </h3>
+                            <button
+                                onClick={() => setShowSettings(false)}
+                                className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-smooth"
+                            >
+                                ✕
+                            </button>
                         </div>
-                        <div>
-                            <label className="block text-slate-400 text-sm mb-2">Departure Time</label>
-                            <input
-                                type="datetime-local"
-                                defaultValue={trip.settings.departureTime}
-                                onChange={(e) => handleUpdateSettings({ departureTime: e.target.value })}
-                                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus-glow transition-smooth"
-                            />
+
+                        {/* Modal Body */}
+                        <div className="p-6 space-y-6">
+                            {/* Trip Info */}
+                            <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+                                <div className="flex items-center gap-3 text-slate-300">
+                                    <span className="text-2xl">📍</span>
+                                    <div>
+                                        <div className="text-sm text-slate-400">Destination</div>
+                                        <div className="text-white font-medium">{trip.settings.destination}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Flight Times */}
+                            <div>
+                                <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
+                                    <span className="text-violet-400">✈️</span> Flight Times
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-slate-400 text-sm mb-2">Landing Time</label>
+                                        <input
+                                            type="datetime-local"
+                                            defaultValue={trip.settings.landingTime}
+                                            onChange={(e) => handleUpdateSettings({ landingTime: e.target.value })}
+                                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus-glow transition-smooth"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-slate-400 text-sm mb-2">Departure Time</label>
+                                        <input
+                                            type="datetime-local"
+                                            defaultValue={trip.settings.departureTime}
+                                            onChange={(e) => handleUpdateSettings({ departureTime: e.target.value })}
+                                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus-glow transition-smooth"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Airport Selection */}
+                            <div>
+                                <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
+                                    <span className="text-cyan-400">🛫</span> Airport
+                                </h4>
+                                <div className="relative" ref={airportRef}>
+                                    <input
+                                        type="text"
+                                        value={airportValue}
+                                        onChange={(e) => {
+                                            setAirportValue(e.target.value);
+                                            setShowAirportDropdown(true);
+                                        }}
+                                        onFocus={() => setShowAirportDropdown(true)}
+                                        onBlur={(e) => {
+                                            setTimeout(() => {
+                                                handleUpdateSettings({ airport: e.target.value });
+                                            }, 200);
+                                        }}
+                                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus-glow transition-smooth"
+                                        placeholder="Search airports..."
+                                    />
+                                    {showAirportDropdown && airportSuggestions.length > 0 && (
+                                        <div className="absolute z-[100] top-full left-0 right-0 mt-2 bg-slate-800 border border-white/10 rounded-xl shadow-2xl max-h-48 overflow-y-auto">
+                                            {airportSuggestions
+                                                .filter(a => a.toLowerCase().includes(airportValue.toLowerCase()))
+                                                .map((airport, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        type="button"
+                                                        className="w-full px-4 py-3 text-left text-white text-sm hover:bg-violet-600/30 transition-smooth first:rounded-t-xl last:rounded-b-xl flex items-center gap-2"
+                                                        onClick={() => {
+                                                            setAirportValue(airport);
+                                                            setShowAirportDropdown(false);
+                                                            handleUpdateSettings({ airport });
+                                                        }}
+                                                    >
+                                                        <span className="text-cyan-400">✈️</span> {airport}
+                                                    </button>
+                                                ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Hotel Selection */}
+                            <div>
+                                <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
+                                    <span className="text-amber-400">🏨</span> Hotel
+                                </h4>
+                                <div className="relative" ref={hotelRef}>
+                                    <input
+                                        type="text"
+                                        value={hotelValue}
+                                        onChange={(e) => {
+                                            setHotelValue(e.target.value);
+                                            setShowHotelDropdown(true);
+                                        }}
+                                        onFocus={() => setShowHotelDropdown(true)}
+                                        onBlur={(e) => {
+                                            setTimeout(() => {
+                                                handleUpdateSettings({ hotel: e.target.value });
+                                            }, 200);
+                                        }}
+                                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus-glow transition-smooth"
+                                        placeholder="Search hotels..."
+                                    />
+                                    {showHotelDropdown && hotelSuggestions.length > 0 && (
+                                        <div className="absolute z-[100] top-full left-0 right-0 mt-2 bg-slate-800 border border-white/10 rounded-xl shadow-2xl max-h-48 overflow-y-auto">
+                                            {hotelSuggestions
+                                                .filter(h => h.toLowerCase().includes(hotelValue.toLowerCase()))
+                                                .map((hotel, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        type="button"
+                                                        className="w-full px-4 py-3 text-left text-white text-sm hover:bg-violet-600/30 transition-smooth first:rounded-t-xl last:rounded-b-xl flex items-center gap-2"
+                                                        onClick={() => {
+                                                            setHotelValue(hotel);
+                                                            setShowHotelDropdown(false);
+                                                            handleUpdateSettings({ hotel });
+                                                        }}
+                                                    >
+                                                        <span className="text-amber-400">🏨</span> {hotel}
+                                                    </button>
+                                                ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <label className="block text-slate-400 text-sm mb-2">Airport</label>
-                            <input
-                                type="text"
-                                defaultValue={trip.settings.airport}
-                                onBlur={(e) => handleUpdateSettings({ airport: e.target.value })}
-                                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus-glow transition-smooth"
-                                placeholder="e.g., CDG"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-slate-400 text-sm mb-2">Hotel</label>
-                            <input
-                                type="text"
-                                defaultValue={trip.settings.hotel}
-                                onBlur={(e) => handleUpdateSettings({ hotel: e.target.value })}
-                                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus-glow transition-smooth"
-                                placeholder="Hotel name"
-                            />
+
+                        {/* Modal Footer */}
+                        <div className="p-6 border-t border-white/10 flex justify-end">
+                            <button
+                                onClick={() => setShowSettings(false)}
+                                className="px-6 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl font-medium hover:from-violet-500 hover:to-purple-500 transition-smooth shadow-lg shadow-violet-500/20"
+                            >
+                                Done
+                            </button>
                         </div>
                     </div>
                 </div>

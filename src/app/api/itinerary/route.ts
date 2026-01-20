@@ -63,14 +63,29 @@ export async function POST(request: NextRequest) {
 
         // Check if all members have voted yes for this item
         const memberCount = trip.members.length;
+        let groupResolved = false;
+
         if (item.votes.yes.length === memberCount) {
             item.status = 'approved';
 
             // If this item is in a group, remove all other items in the group
             if (item.groupId) {
-                trip.itinerary = trip.itinerary.filter((otherItem: any) =>
-                    otherItem.id === itemId || otherItem.groupId !== item.groupId
+                groupResolved = true;
+                const groupIdToRemove = item.groupId;
+
+                // Remove other items in the group from database
+                await Trip.updateOne(
+                    { _id: tripId },
+                    {
+                        $pull: {
+                            itinerary: {
+                                groupId: groupIdToRemove,
+                                id: { $ne: itemId }
+                            }
+                        }
+                    }
                 );
+
                 // Clear the groupId since it's now the only one
                 item.groupId = undefined;
             }
@@ -80,16 +95,32 @@ export async function POST(request: NextRequest) {
         }
 
         // Save the current item's vote changes
-        await Trip.updateOne(
-            { _id: tripId, 'itinerary.id': itemId },
-            {
-                $set: {
-                    'itinerary.$.votes': item.votes,
-                    'itinerary.$.status': item.status,
-                    'itinerary.$.groupId': item.groupId
+        if (groupResolved) {
+            // When group is resolved, use $unset to remove groupId field
+            await Trip.updateOne(
+                { _id: tripId, 'itinerary.id': itemId },
+                {
+                    $set: {
+                        'itinerary.$.votes': item.votes,
+                        'itinerary.$.status': item.status
+                    },
+                    $unset: {
+                        'itinerary.$.groupId': ''
+                    }
                 }
-            }
-        );
+            );
+        } else {
+            // Normal update
+            await Trip.updateOne(
+                { _id: tripId, 'itinerary.id': itemId },
+                {
+                    $set: {
+                        'itinerary.$.votes': item.votes,
+                        'itinerary.$.status': item.status
+                    }
+                }
+            );
+        }
 
         return NextResponse.json({
             item,

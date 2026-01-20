@@ -1,7 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+
+interface PlaceResult {
+  id: string;
+  name: string;
+  displayName: string;
+  lat: number;
+  lon: number;
+  type: string;
+}
 
 export default function HomePage() {
   const router = useRouter();
@@ -11,11 +20,78 @@ export default function HomePage() {
     tripName: '',
     creatorName: '',
     destination: '',
+    destinationCoords: null as { lat: number; lon: number } | null,
+    hotel: '',
+    airport: '',
     groupSize: 4,
     daysCount: 3,
     nightsCount: 2,
     ageGroup: 'mixed' as 'kids' | 'teens' | 'adults' | 'seniors' | 'mixed',
   });
+
+  // Autocomplete state
+  const [suggestions, setSuggestions] = useState<PlaceResult[]>([]);
+  const [activeField, setActiveField] = useState<'destination' | 'hotel' | 'airport' | null>(null);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Fetch suggestions from places API
+  const fetchSuggestions = async (query: string, type: 'city' | 'hotel' | 'airport', near?: string) => {
+    if (query.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+
+    setIsLoadingSuggestions(true);
+    try {
+      const params = new URLSearchParams({ q: query, type });
+      if (near) params.set('near', near);
+
+      const response = await fetch(`/api/places?${params.toString()}`);
+      const data = await response.json();
+      setSuggestions(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+      setSuggestions([]);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  };
+
+  // Debounced input handler
+  const handleInputChange = (field: 'destination' | 'hotel' | 'airport', value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setActiveField(field);
+
+    // Clear previous debounce
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    // Debounce the API call
+    debounceRef.current = setTimeout(() => {
+      const type = field === 'destination' ? 'city' : field;
+      const near = field !== 'destination' && formData.destinationCoords
+        ? `${formData.destinationCoords.lat},${formData.destinationCoords.lon}`
+        : undefined;
+      fetchSuggestions(value, type, near);
+    }, 300);
+  };
+
+  // Select a suggestion
+  const selectSuggestion = (place: PlaceResult, field: 'destination' | 'hotel' | 'airport') => {
+    if (field === 'destination') {
+      setFormData(prev => ({
+        ...prev,
+        destination: place.name,
+        destinationCoords: { lat: place.lat, lon: place.lon },
+        hotel: '', // Clear hotel/airport when destination changes
+        airport: '',
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, [field]: place.name }));
+    }
+    setSuggestions([]);
+    setActiveField(null);
+  };
 
   const handleCreateTrip = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,6 +106,8 @@ export default function HomePage() {
           creatorName: formData.creatorName,
           settings: {
             destination: formData.destination,
+            hotel: formData.hotel,
+            airport: formData.airport,
             groupSize: formData.groupSize,
             daysCount: formData.daysCount,
             nightsCount: formData.nightsCount,
@@ -123,17 +201,97 @@ export default function HomePage() {
                 />
               </div>
 
-              <div>
+              {/* Destination with Autocomplete */}
+              <div className="relative">
                 <label className="block text-slate-300 text-sm font-medium mb-2">Destination</label>
                 <input
                   type="text"
                   required
                   className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus-glow transition-smooth hover:border-violet-500/50"
-                  placeholder="Paris, France"
+                  placeholder="Start typing a city..."
                   value={formData.destination}
-                  onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+                  onChange={(e) => handleInputChange('destination', e.target.value)}
+                  onFocus={() => setActiveField('destination')}
+                  onBlur={() => setTimeout(() => activeField === 'destination' && setActiveField(null), 200)}
                 />
+                {activeField === 'destination' && suggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-white/10 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                    {suggestions.map((place) => (
+                      <button
+                        key={place.id}
+                        type="button"
+                        className="w-full px-4 py-3 text-left text-white hover:bg-violet-500/20 transition-colors first:rounded-t-xl last:rounded-b-xl"
+                        onClick={() => selectSuggestion(place, 'destination')}
+                      >
+                        <div className="font-medium">{place.name}</div>
+                        <div className="text-xs text-slate-400 truncate">{place.displayName}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+
+              {/* Hotel with Autocomplete - only show if destination is selected */}
+              {formData.destinationCoords && (
+                <div className="relative">
+                  <label className="block text-slate-300 text-sm font-medium mb-2">Hotel (Optional)</label>
+                  <input
+                    type="text"
+                    className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus-glow transition-smooth hover:border-violet-500/50"
+                    placeholder="Search for a hotel..."
+                    value={formData.hotel}
+                    onChange={(e) => handleInputChange('hotel', e.target.value)}
+                    onFocus={() => setActiveField('hotel')}
+                    onBlur={() => setTimeout(() => activeField === 'hotel' && setActiveField(null), 200)}
+                  />
+                  {activeField === 'hotel' && suggestions.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-white/10 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                      {suggestions.map((place) => (
+                        <button
+                          key={place.id}
+                          type="button"
+                          className="w-full px-4 py-3 text-left text-white hover:bg-cyan-500/20 transition-colors first:rounded-t-xl last:rounded-b-xl"
+                          onClick={() => selectSuggestion(place, 'hotel')}
+                        >
+                          <div className="font-medium">{place.name}</div>
+                          <div className="text-xs text-slate-400 truncate">{place.displayName}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Airport with Autocomplete - only show if destination is selected */}
+              {formData.destinationCoords && (
+                <div className="relative">
+                  <label className="block text-slate-300 text-sm font-medium mb-2">Airport (Optional)</label>
+                  <input
+                    type="text"
+                    className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus-glow transition-smooth hover:border-violet-500/50"
+                    placeholder="Search for an airport..."
+                    value={formData.airport}
+                    onChange={(e) => handleInputChange('airport', e.target.value)}
+                    onFocus={() => setActiveField('airport')}
+                    onBlur={() => setTimeout(() => activeField === 'airport' && setActiveField(null), 200)}
+                  />
+                  {activeField === 'airport' && suggestions.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-white/10 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                      {suggestions.map((place) => (
+                        <button
+                          key={place.id}
+                          type="button"
+                          className="w-full px-4 py-3 text-left text-white hover:bg-pink-500/20 transition-colors first:rounded-t-xl last:rounded-b-xl"
+                          onClick={() => selectSuggestion(place, 'airport')}
+                        >
+                          <div className="font-medium">{place.name}</div>
+                          <div className="text-xs text-slate-400 truncate">{place.displayName}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
