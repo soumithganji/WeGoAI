@@ -25,13 +25,15 @@ export default function TripPage({ params }: TripPageProps) {
 
     // Autocomplete states
     const [airportSuggestions, setAirportSuggestions] = useState<string[]>([]);
-    const [hotelSuggestions, setHotelSuggestions] = useState<string[]>([]);
+    const [hotelSuggestions, setHotelSuggestions] = useState<{ name: string; address: string }[]>([]);
     const [showAirportDropdown, setShowAirportDropdown] = useState(false);
     const [showHotelDropdown, setShowHotelDropdown] = useState(false);
     const [airportValue, setAirportValue] = useState('');
     const [hotelValue, setHotelValue] = useState('');
+    const [hotelSearchLoading, setHotelSearchLoading] = useState(false);
     const airportRef = useRef<HTMLDivElement>(null);
     const hotelRef = useRef<HTMLDivElement>(null);
+    const hotelSearchTimeout = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         const loadData = async () => {
@@ -85,28 +87,67 @@ export default function TripPage({ params }: TripPageProps) {
         return () => clearInterval(interval);
     }, [tripId, router]);
 
-    // Fetch airport and hotel suggestions when trip loads
+    // Fetch airport suggestions when trip loads
     useEffect(() => {
-        const fetchSuggestions = async () => {
+        const fetchAirportSuggestions = async () => {
             if (!trip?.settings?.destination) return;
 
             try {
-                const res = await fetch(`/api/suggestions?destination=${encodeURIComponent(trip.settings.destination)}`);
+                const res = await fetch(`/api/suggestions?destination=${encodeURIComponent(trip.settings.destination)}&type=airports`);
                 const data = await res.json();
 
                 if (data.airports) setAirportSuggestions(data.airports);
-                if (data.hotels) setHotelSuggestions(data.hotels);
 
                 // Initialize input values with existing settings
                 setAirportValue(trip.settings.airport || '');
                 setHotelValue(trip.settings.hotel || '');
             } catch (error) {
-                console.error('Error fetching suggestions:', error);
+                console.error('Error fetching airport suggestions:', error);
             }
         };
 
-        fetchSuggestions();
-    }, [trip?.settings?.destination]);
+        fetchAirportSuggestions();
+    }, [trip?.settings?.destination, trip?.settings?.airport, trip?.settings?.hotel]);
+
+    // Dynamic hotel search with debouncing
+    const searchHotels = async (keyword: string) => {
+        if (keyword.length < 2) {
+            setHotelSuggestions([]);
+            return;
+        }
+
+        setHotelSearchLoading(true);
+        try {
+            // Pass the destination to search within the correct city
+            const destination = trip?.settings?.destination || '';
+            const res = await fetch(`/api/hotels/search?keyword=${encodeURIComponent(keyword)}&destination=${encodeURIComponent(destination)}`);
+            const data = await res.json();
+
+            if (data.hotels) {
+                setHotelSuggestions(data.hotels);
+            }
+        } catch (error) {
+            console.error('Error searching hotels:', error);
+        } finally {
+            setHotelSearchLoading(false);
+        }
+    };
+
+    // Handle hotel input change with debounce
+    const handleHotelInputChange = (value: string) => {
+        setHotelValue(value);
+        setShowHotelDropdown(true);
+
+        // Clear previous timeout
+        if (hotelSearchTimeout.current) {
+            clearTimeout(hotelSearchTimeout.current);
+        }
+
+        // Debounce the search
+        hotelSearchTimeout.current = setTimeout(() => {
+            searchHotels(value);
+        }, 300);
+    };
 
     // Handle click outside to close dropdowns
     useEffect(() => {
@@ -408,17 +449,15 @@ export default function TripPage({ params }: TripPageProps) {
 
                             {/* Hotel Selection */}
                             <div>
-                                <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
+                                <h4 className="text-white font-semibold mb-1 flex items-center gap-2">
                                     <span className="text-amber-400">🏨</span> Hotel
                                 </h4>
+                                <p className="text-slate-500 text-xs mb-3">Search for any hotel worldwide</p>
                                 <div className="relative" ref={hotelRef}>
                                     <input
                                         type="text"
                                         value={hotelValue}
-                                        onChange={(e) => {
-                                            setHotelValue(e.target.value);
-                                            setShowHotelDropdown(true);
-                                        }}
+                                        onChange={(e) => handleHotelInputChange(e.target.value)}
                                         onFocus={() => setShowHotelDropdown(true)}
                                         onBlur={(e) => {
                                             setTimeout(() => {
@@ -428,24 +467,42 @@ export default function TripPage({ params }: TripPageProps) {
                                         className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus-glow transition-smooth"
                                         placeholder="Search hotels..."
                                     />
-                                    {showHotelDropdown && hotelSuggestions.length > 0 && (
-                                        <div className="absolute z-[100] top-full left-0 right-0 mt-2 bg-slate-800 border border-white/10 rounded-xl shadow-2xl max-h-48 overflow-y-auto">
-                                            {hotelSuggestions
-                                                .filter(h => h.toLowerCase().includes(hotelValue.toLowerCase()))
-                                                .map((hotel, idx) => (
-                                                    <button
-                                                        key={idx}
-                                                        type="button"
-                                                        className="w-full px-4 py-3 text-left text-white text-sm hover:bg-violet-600/30 transition-smooth first:rounded-t-xl last:rounded-b-xl flex items-center gap-2"
-                                                        onClick={() => {
-                                                            setHotelValue(hotel);
-                                                            setShowHotelDropdown(false);
-                                                            handleUpdateSettings({ hotel });
-                                                        }}
-                                                    >
-                                                        <span className="text-amber-400">🏨</span> {hotel}
-                                                    </button>
-                                                ))}
+                                    {/* Loading indicator */}
+                                    {hotelSearchLoading && (
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                            <svg className="animate-spin h-5 w-5 text-violet-400" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                            </svg>
+                                        </div>
+                                    )}
+                                    {showHotelDropdown && hotelSuggestions.length > 0 && !hotelSearchLoading && (
+                                        <div className="absolute z-[100] top-full left-0 right-0 mt-2 bg-slate-800 border border-white/10 rounded-xl shadow-2xl max-h-56 overflow-y-auto">
+                                            <div className="px-4 py-2 text-xs text-slate-500 border-b border-white/5 bg-slate-800/50 sticky top-0">
+                                                Search results
+                                            </div>
+                                            {hotelSuggestions.map((hotel, idx) => (
+                                                <button
+                                                    key={idx}
+                                                    type="button"
+                                                    className="w-full px-4 py-3 text-left hover:bg-violet-600/30 transition-smooth"
+                                                    onClick={() => {
+                                                        setHotelValue(hotel.name);
+                                                        setShowHotelDropdown(false);
+                                                        handleUpdateSettings({ hotel: hotel.name });
+                                                    }}
+                                                >
+                                                    <div className="text-white text-sm font-medium">{hotel.name}</div>
+                                                    {hotel.address && (
+                                                        <div className="text-slate-400 text-xs">{hotel.address}</div>
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {showHotelDropdown && hotelValue.length >= 2 && hotelSuggestions.length === 0 && !hotelSearchLoading && (
+                                        <div className="absolute z-[100] top-full left-0 right-0 mt-2 bg-slate-800 border border-white/10 rounded-xl shadow-2xl p-4 text-center text-slate-400 text-sm">
+                                            No hotels found. Try a different search term.
                                         </div>
                                     )}
                                 </div>
