@@ -21,15 +21,30 @@ export default function ChatInterface({
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const messagesContainerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const [isNearBottom, setIsNearBottom] = useState(true);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
+    // Check if user is near the bottom of the chat
+    const handleScroll = () => {
+        const container = messagesContainerRef.current;
+        if (container) {
+            const threshold = 100; // pixels from bottom
+            const isNear = container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+            setIsNearBottom(isNear);
+        }
+    };
+
+    // Only auto-scroll if user is near bottom
     useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
+        if (isNearBottom) {
+            scrollToBottom();
+        }
+    }, [messages, isNearBottom]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -48,6 +63,23 @@ export default function ChatInterface({
         inputRef.current?.focus();
     };
 
+    const formatMessageContent = (content: string) => {
+        const parts = content.split(/(@weai)/gi);
+        return parts.map((part, i) => {
+            if (part.toLowerCase() === '@weai') {
+                return (
+                    <span
+                        key={i}
+                        className="bg-blue-500/30 text-blue-100 px-1.5 py-0.5 rounded-md font-medium mx-0.5 inline-block"
+                    >
+                        {part}
+                    </span>
+                );
+            }
+            return part;
+        });
+    };
+
     return (
         <div className="flex flex-col h-full bg-gradient-to-b from-slate-950 to-slate-900">
             {/* Chat Header */}
@@ -60,7 +92,11 @@ export default function ChatInterface({
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            <div
+                ref={messagesContainerRef}
+                onScroll={handleScroll}
+                className="flex-1 overflow-y-auto p-5 space-y-4"
+            >
                 {messages.length === 0 && (
                     <div className="text-center py-16 animate-fade-in">
                         <div className="w-20 h-20 rounded-full bg-gradient-to-br from-violet-500/20 to-pink-500/20 flex items-center justify-center mx-auto mb-4">
@@ -82,7 +118,7 @@ export default function ChatInterface({
 
                     return (
                         <div
-                            key={messageId}
+                            key={index}
                             className={`flex ${msg.senderId === userId ? 'justify-end' : 'justify-start'} animate-slide-up`}
                             style={{ animationDelay: `${index * 0.05}s` }}
                         >
@@ -103,7 +139,7 @@ export default function ChatInterface({
                                         AI Assistant
                                     </p>
                                 )}
-                                <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                                <p className="whitespace-pre-wrap leading-relaxed">{formatMessageContent(msg.content)}</p>
                                 {timeString && (
                                     <p className="text-xs opacity-50 mt-2 text-right">
                                         {timeString}

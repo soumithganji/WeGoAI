@@ -74,7 +74,32 @@ export default function TripPage({ params }: TripPageProps) {
             try {
                 const msgRes = await fetch(`/api/messages?tripId=${tripId}`);
                 const msgData = await msgRes.json();
-                setMessages(msgData);
+
+                setMessages(prev => {
+                    const optimistic = prev.filter(m => m.id && m.id.startsWith('temp-'));
+                    if (optimistic.length === 0) return msgData;
+
+                    // Create a frequency map of incoming messages to handle duplicates correctly
+                    // (e.g. if user sends "hi" twice rapidly)
+                    const incomingSignatures = new Map<string, number>();
+                    msgData.forEach((msg: Message) => {
+                        const key = `${msg.senderId}:${msg.content}`;
+                        incomingSignatures.set(key, (incomingSignatures.get(key) || 0) + 1);
+                    });
+
+                    const stillPending = optimistic.filter(opt => {
+                        const key = `${opt.senderId}:${opt.content}`;
+                        const count = incomingSignatures.get(key);
+                        if (count && count > 0) {
+                            // This optimistic message is now present in the server response
+                            incomingSignatures.set(key, count - 1);
+                            return false;
+                        }
+                        return true;
+                    });
+
+                    return [...msgData, ...stillPending];
+                });
 
                 const tripRes = await fetch(`/api/trips/${tripId}`);
                 const tripData = await tripRes.json();
@@ -165,6 +190,20 @@ export default function TripPage({ params }: TripPageProps) {
     }, []);
 
     const handleSendMessage = async (content: string) => {
+        // Optimistic update
+        const tempId = 'temp-' + Date.now();
+        const optimisticMessage: Message = {
+            id: tempId,
+            tripId,
+            senderId: userId,
+            senderName: userName,
+            content,
+            isAIMention: content.toLowerCase().includes('@weai'),
+            createdAt: new Date(),
+        };
+
+        setMessages((prev) => [...prev, optimisticMessage]);
+
         try {
             const res = await fetch('/api/messages', {
                 method: 'POST',
@@ -178,13 +217,19 @@ export default function TripPage({ params }: TripPageProps) {
             });
 
             const data = await res.json();
-            setMessages((prev) => [...prev, data]);
+
+            // Replace optimistic message with real one
+            setMessages((prev) => prev.map(msg =>
+                msg.id === tempId ? data : msg
+            ));
 
             if (data.aiResponse) {
                 setMessages((prev) => [...prev, data.aiResponse]);
             }
         } catch (error) {
             console.error('Error sending message:', error);
+            // Revert optimistic update on error
+            setMessages((prev) => prev.filter(msg => msg.id !== tempId));
         }
     };
 

@@ -149,10 +149,156 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
         1. Match group preferences
         2. Don't clash with existing itinerary items
         3. Account for travel times between locations
-        4. Are practical given the trip duration and group size""",
+        4. Are practical given the trip duration and group size
+        
+        IMPORTANT: If the user asks for an itinerary, plan, or suggestions to add, you MUST end your response with a JSON block in this EXACT format:
+        
+        ```json
+        {{
+            "action": "add_items",
+            "items": [
+                {{
+                    "title": "Activity Name",
+                    "description": "Brief description",
+                    "day": 1,
+                    "startTime": "09:00",
+                    "endTime": "11:00",
+                    "location": "Address or location name"
+                }}
+            ]
+        }}
+        ```
+        
+        Each item needs: title, description, day (1-based), startTime (HH:MM), endTime (HH:MM), location.
+        Make sure times don't overlap for the same day.""",
         agent=planner_agent,
-        expected_output="Top 5 ranked suggestions with reasons why each is a good fit for the group. Include estimated times and any potential conflicts. If the user asks to ADD items, output a JSON block with the items.",
+        expected_output="Top 5 ranked suggestions with reasons, FOLLOWED BY a JSON block with action: add_items and the items array.",
     )
+
+    query_lower = user_query.lower()
+
+    # FAST PATH: Itinerary modifications (move, update, remove)
+    is_modification = any(word in query_lower for word in ["move", "change", "update", "shift", "reschedule", "delete", "remove", "cancel"])
+    
+    if is_modification:
+        mod_task = Task(
+            description=f"""The user wants to MODIFY the itinerary.
+            
+            User Request: {user_query}
+            
+            Existing Itinerary:
+            {itinerary_str}
+            
+            Trip Settings: {context_str}
+            
+            Identify the item(s) to modify.
+            
+            OUTPUT ONLY JSON (no text) with action "update_items".
+            
+            Format:
+            ```json
+            {{
+                "action": "update_items",
+                "updates": [
+                    {{
+                        "originalTitle": "Exact or partial title of item",
+                        "day": 1,
+                        "newStartTime": "20:00",
+                        "newEndTime": "22:00"
+                    }}
+                ]
+            }}
+            ```
+            
+            For moving items: Update startTime and endTime.
+            For renaming: Add "newTitle": "New Name".
+            
+            RULES:
+            1. Use 24-hour format for times (HH:MM).
+            2. Ensure "day" matches the item's day.
+            3. Output ONLY JSON.
+            """,
+            agent=planner_agent,
+            expected_output="JSON block with action: update_items."
+        )
+        
+        fast_crew = Crew(
+            agents=[planner_agent],
+            tasks=[mod_task],
+            process=Process.sequential,
+            verbose=True
+        )
+        result = fast_crew.kickoff()
+        return str(result)
+    
+    # FAST PATH: General itinerary planning (no web search needed)
+    # FAST PATH: General itinerary planning (no web search needed)
+    # Check for keywords rather than exact phrases to be more robust
+    query_words = query_lower.split()
+    has_action = any(w in query_lower for w in ["create", "make", "plan", "generate", "suggest", "build"])
+    has_object = any(w in query_lower for w in ["itinerary", "plan", "trip", "schedule"])
+    
+    is_general_planning = has_action and has_object
+    
+    needs_web_search = any(phrase in query_lower for phrase in [
+        "restaurant", "hotel", "specific", "recommend", "best place",
+        "where to eat", "where to stay", "find me", "search for"
+    ])
+    
+    if is_general_planning and not needs_web_search:
+        # initialize faster LLM for speed
+        fast_llm = ChatNVIDIA(
+            model="meta/llama-3.1-8b-instruct",
+            api_key=os.environ.get("NVIDIA_NIM_API_KEY"),
+            base_url="https://integrate.api.nvidia.com/v1"
+        )
+        
+        fast_planner_agent = Agent(
+            role="Fast Trip Planner",
+            goal="Create valid JSON itineraries quickly",
+            backstory="You are an efficient travel planner who works instantly.",
+            llm=fast_llm,
+            verbose=True
+        )
+
+        general_task = Task(
+            description=f"""Create a general itinerary for: {user_query}
+            
+            Trip settings: {context_str}
+            
+            RULES:
+            1. For meals, use GENERIC titles: "Breakfast", "Lunch", "Dinner" - no restaurant names.
+            2. For attractions, use well-known landmarks (e.g., "Visit Eiffel Tower").
+            3. Keep descriptions to MAX 5 words each (very brief).
+            4. Limit to 3-4 activities per day (including meals) to keep it concise.
+            5. OUTPUT A SINGLE JSON OBJECT containing ALL items for ALL days in one 'items' array.
+            6. Do NOT output multiple JSON blocks.
+            
+            OUTPUT ONLY THIS JSON FORMAT (no other text):
+            
+            ```json
+            {{
+                "action": "add_items",
+                "items": [
+                    {{"title": "Visit Eiffel Tower", "description": "Iconic landmark views", "day": 1, "startTime": "09:00", "endTime": "11:00", "location": "Eiffel Tower"}},
+                    {{"title": "Lunch", "description": "Midday meal", "day": 1, "startTime": "12:00", "endTime": "13:30", "location": "Central area"}},
+                    {{"title": "Visit Notre Dame", "description": "Cathedral visit", "day": 2, "startTime": "09:00", "endTime": "11:00", "location": "Notre Dame"}}
+                ]
+            }}
+            ```""",
+            agent=fast_planner_agent,
+            expected_output="ONLY a JSON block with action: add_items. No other text."
+        )
+        
+        fast_crew = Crew(
+            agents=[fast_planner_agent],
+            tasks=[general_task],
+            process=Process.sequential,
+            verbose=True
+        )
+        
+        result = fast_crew.kickoff()
+        return str(result)
 
     # Special handling for "add to itinerary" intent - FAST PATH
     if "add" in user_query.lower() and ("itinerary" in user_query.lower() or "them" in user_query.lower()):
