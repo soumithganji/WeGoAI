@@ -150,12 +150,17 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
         2. Don't clash with existing itinerary items
         3. Account for travel times between locations
         4. Are practical given the trip duration and group size
+
+        Determine if the user wants to REPLACE existing suggestions or ADD MORE to the list.
+        - If query has "more", "additional", "other", "else": replacementStrategy = "append"
+        - If query has "instead", "change", "replace", "different", or is a new request: replacementStrategy = "replace"
         
         IMPORTANT: If the user asks for an itinerary, plan, or suggestions to add, you MUST end your response with a JSON block in this EXACT format:
         
         ```json
         {{
             "action": "add_items",
+            "replacementStrategy": "replace",
             "items": [
                 {{
                     "title": "Activity Name",
@@ -168,6 +173,8 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
             ]
         }}
         ```
+        
+        "replacementStrategy" must be either "replace" or "append".
         
         Each item needs: title, description, day (1-based), startTime (HH:MM), endTime (HH:MM), location.
         Make sure times don't overlap for the same day.""",
@@ -230,13 +237,88 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
         )
         result = fast_crew.kickoff()
         return str(result)
+
+    # FAST PATH: Targeted Suggestions (Search + Format in one step)
+    # optimizing latency by using single agent instead of 3
+    is_suggestion_request = any(w in query_lower for w in ["suggest", "recommend", "options", "places", "spots", "ideas"])
+    
+    if is_suggestion_request:
+        # Create a specialized agent that can search AND format
+        suggestion_agent = Agent(
+            role="Local Expert & Planner",
+            goal="Find the best places matching the request and format them for the itinerary.",
+            backstory="You are a knowledgeable local guide who knows the best spots. You are efficiency-focused and always return structured data.",
+            tools=[search_tool],
+            llm=llm, # Use the 70b model for high quality + correct formatting
+            verbose=True
+        )
+
+        suggestion_task = Task(
+            description=f"""User Request: {user_query}
+            
+            Trip Context: {context_str}
+            Chat History Summary:
+            {chat_str}
+            
+            Your goal is to:
+            1. Search for real, high-quality options that match the user's request.
+            2. Select the top 3-5 best options.
+            3. Format them IMMEDIATELY as a JSON object for the itinerary.
+            
+            CRITICAL: The user wants to SEE these options in their itinerary panel to vote on them.
+            
+            OUTPUT RULES:
+            - Find REAL places with real names and locations.
+            - If the user specifies a day (e.g., "day 2"), use that. Otherwise use Day 1.
+            - Pick a logical time slot (e.g., 19:00-21:00 for dinner).
+            - All options can share the same time slot (so the user can pick one).
+            - Determine "replacementStrategy": "append" if user asked for "more/other", "replace" otherwise.
+            - END your response with the JSON block.
+            
+            JSON FORMAT:
+            ```json
+            {{
+                "action": "add_items",
+                "replacementStrategy": "replace",
+                "items": [
+                    {{
+                        "title": "Name of Place 1",
+                        "description": "Why it's good (brief)",
+                        "day": 1,
+                        "startTime": "19:00",
+                        "endTime": "21:00",
+                        "location": "Real Address or Area"
+                    }},
+                    {{
+                        "title": "Name of Place 2",
+                        "description": "Why it's good (brief)",
+                        "day": 1,
+                        "startTime": "19:00",
+                        "endTime": "21:00",
+                        "location": "Real Address or Area"
+                    }}
+                ]
+            }}
+            ```
+            """,
+            agent=suggestion_agent,
+            expected_output="Top suggestions followed by a JSON block with action: add_items."
+        )
+        
+        fast_crew = Crew(
+            agents=[suggestion_agent],
+            tasks=[suggestion_task],
+            process=Process.sequential,
+            verbose=True
+        )
+        
+        result = fast_crew.kickoff()
+        return str(result)
     
     # FAST PATH: General itinerary planning (no web search needed)
-    # FAST PATH: General itinerary planning (no web search needed)
     # Check for keywords rather than exact phrases to be more robust
-    query_words = query_lower.split()
     has_action = any(w in query_lower for w in ["create", "make", "plan", "generate", "suggest", "build"])
-    has_object = any(w in query_lower for w in ["itinerary", "plan", "trip", "schedule"])
+    has_object = any(w in query_lower for w in ["itinerary", "itenary", "plan", "trip", "schedule"])
     
     is_general_planning = has_action and has_object
     
@@ -273,12 +355,14 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
             4. Limit to 3-4 activities per day (including meals) to keep it concise.
             5. OUTPUT A SINGLE JSON OBJECT containing ALL items for ALL days in one 'items' array.
             6. Do NOT output multiple JSON blocks.
+            7. Set "replacementStrategy" to "replace" (default for new plans).
             
             OUTPUT ONLY THIS JSON FORMAT (no other text):
             
             ```json
             {{
                 "action": "add_items",
+                "replacementStrategy": "replace",
                 "items": [
                     {{"title": "Visit Eiffel Tower", "description": "Iconic landmark views", "day": 1, "startTime": "09:00", "endTime": "11:00", "location": "Eiffel Tower"}},
                     {{"title": "Lunch", "description": "Midday meal", "day": 1, "startTime": "12:00", "endTime": "13:30", "location": "Central area"}},
@@ -318,6 +402,7 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
             Format them as a valid JSON object:
             {{
                 "action": "add_items",
+                "replacementStrategy": "append",
                 "items": [
                     {{
                         "title": "Option 1 Name",

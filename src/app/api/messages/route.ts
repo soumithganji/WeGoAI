@@ -107,7 +107,10 @@ export async function POST(request: NextRequest) {
                     try {
                         const actionData = JSON.parse(jsonString);
                         if (actionData.action === 'add_items' && Array.isArray(actionData.items)) {
-                            // First pass: Count items per time slot to identify actual groups
+                            // Extract strategy (default to 'replace' if not specified, unless it's clearly an append scenario)
+                            const replacementStrategy = actionData.replacementStrategy || 'replace';
+
+                            // First pass: Count items per time slot to identify actual groups in the NEW data
                             const slotCounts = new Map<string, number>();
                             actionData.items.forEach((item: any) => {
                                 const d = item.day || 1;
@@ -119,6 +122,45 @@ export async function POST(request: NextRequest) {
 
                             const itemsByTimeSlot = new Map<string, string>(); // key -> groupId
 
+                            // Helper to convert HH:MM to minutes
+                            const toMinutes = (time: string) => {
+                                const [h, m] = time.split(':').map(Number);
+                                return h * 60 + m;
+                            };
+
+                            // Strategies require access to existing trip doc first
+                            const tripDoc = await Trip.findById(tripId);
+                            if (!tripDoc) throw new Error('Trip not found');
+
+                            // Identification of items to remove (for replace strategy)
+                            const itemsToRemove = new Set<string>();
+
+                            // Map to hold target groupIds for APPEND strategy
+                            const targetGroups = new Map<string, string>(); // slotKey -> existingGroupId
+
+                            if (replacementStrategy === 'append') {
+                                // Find existing groups to merge into
+                                actionData.items.forEach((newItem: any) => {
+                                    const d = newItem.day || 1;
+                                    const s = newItem.startTime || '09:00';
+                                    const e = newItem.endTime || '11:00';
+                                    const slotKey = `${d}-${s}-${e}`;
+
+                                    // Look for existing AI items in this slot
+                                    const existingGroupItem = tripDoc.itinerary.find((i: any) =>
+                                        i.day === d &&
+                                        i.startTime === s &&
+                                        i.endTime === e &&
+                                        i.suggestedBy === 'ai' &&
+                                        i.groupId
+                                    );
+
+                                    if (existingGroupItem) {
+                                        targetGroups.set(slotKey, existingGroupItem.groupId);
+                                    }
+                                });
+                            }
+
                             const newItems = actionData.items.map((item: any) => {
                                 const day = item.day || 1;
                                 const startTime = item.startTime || '09:00';
@@ -127,8 +169,12 @@ export async function POST(request: NextRequest) {
 
                                 let groupId = undefined;
 
-                                // Only assign groupId if there are multiple items in this slot (alternatives)
-                                if ((slotCounts.get(slotKey) || 0) > 1) {
+                                // Case 1: Append to existing group
+                                if (replacementStrategy === 'append' && targetGroups.has(slotKey)) {
+                                    groupId = targetGroups.get(slotKey);
+                                }
+                                // Case 2: Create new group if we have multiples in THIS batch
+                                else if ((slotCounts.get(slotKey) || 0) > 1) {
                                     if (!itemsByTimeSlot.has(slotKey)) {
                                         itemsByTimeSlot.set(slotKey, uuidv4());
                                     }
@@ -143,7 +189,7 @@ export async function POST(request: NextRequest) {
                                     startTime,
                                     endTime,
                                     location: item.location || '',
-                                    groupId: groupId, // Only present if truly part of a group
+                                    groupId: groupId,
                                     votes: { yes: [], no: [] },
                                     status: 'pending',
                                     suggestedBy: 'ai',
@@ -151,13 +197,45 @@ export async function POST(request: NextRequest) {
                                 };
                             });
 
-                            // Add to trip
-                            const tripDoc = await Trip.findById(tripId);
-                            if (tripDoc) {
-                                tripDoc.itinerary.push(...newItems);
-                                await tripDoc.save();
-                                console.log(`Added ${newItems.length} items to itinerary from AI`);
+                            // Logic to identify items to replace
+                            if (replacementStrategy === 'replace') {
+                                const genericTitles = ['breakfast', 'lunch', 'dinner'];
+
+                                newItems.forEach((newItem: any) => {
+                                    const newStart = toMinutes(newItem.startTime);
+                                    const newEnd = toMinutes(newItem.endTime);
+
+                                    tripDoc.itinerary.forEach((existingItem: any) => {
+                                        if (existingItem.day === newItem.day) {
+                                            const existStart = toMinutes(existingItem.startTime);
+                                            const existEnd = toMinutes(existingItem.endTime);
+
+                                            // Overlap check
+                                            if (newStart < existEnd && existStart < newEnd) {
+                                                // Condition 1: It's a generic placeholder
+                                                const isGeneric = genericTitles.includes(existingItem.title.toLowerCase());
+
+                                                // Condition 2: It's a pending AI suggestion we want to supersede
+                                                const isPendingAI = existingItem.suggestedBy === 'ai' && existingItem.status === 'pending';
+
+                                                if (isGeneric || isPendingAI) {
+                                                    itemsToRemove.add(existingItem.id);
+                                                }
+                                            }
+                                        }
+                                    });
+                                });
                             }
+
+                            if (itemsToRemove.size > 0) {
+                                console.log(`Removing ${itemsToRemove.size} items (Strategy: ${replacementStrategy})`);
+                                tripDoc.itinerary = tripDoc.itinerary.filter((item: any) => !itemsToRemove.has(item.id));
+                            }
+
+                            tripDoc.itinerary.push(...newItems);
+                            await tripDoc.save();
+                            console.log(`Added ${newItems.length} items to itinerary (Strategy: ${replacementStrategy})`);
+
 
                             // Remove the JSON block from the user-facing message
                             if (jsonMatch) {
