@@ -110,23 +110,34 @@ export async function POST(request: NextRequest) {
                             // Extract strategy (default to 'replace' if not specified, unless it's clearly an append scenario)
                             const replacementStrategy = actionData.replacementStrategy || 'replace';
 
+                            // Helper to validate HH:MM format
+                            const isValidTime = (time: string) => {
+                                if (!time || typeof time !== 'string') return false;
+                                const match = time.match(/^(\d{1,2}):(\d{2})$/);
+                                if (!match) return false;
+                                const h = parseInt(match[1], 10);
+                                const m = parseInt(match[2], 10);
+                                return h >= 0 && h <= 23 && m >= 0 && m <= 59;
+                            };
+
+                            // Helper to convert HH:MM to minutes
+                            const toMinutes = (time: string) => {
+                                if (!isValidTime(time)) return 0;
+                                const [h, m] = time.split(':').map(Number);
+                                return h * 60 + m;
+                            };
+
                             // First pass: Count items per time slot to identify actual groups in the NEW data
                             const slotCounts = new Map<string, number>();
                             actionData.items.forEach((item: any) => {
                                 const d = item.day || 1;
-                                const s = item.startTime || '09:00';
-                                const e = item.endTime || '11:00';
+                                const s = isValidTime(item.startTime) ? item.startTime : '09:00';
+                                const e = isValidTime(item.endTime) ? item.endTime : '11:00';
                                 const key = `${d}-${s}-${e}`;
                                 slotCounts.set(key, (slotCounts.get(key) || 0) + 1);
                             });
 
                             const itemsByTimeSlot = new Map<string, string>(); // key -> groupId
-
-                            // Helper to convert HH:MM to minutes
-                            const toMinutes = (time: string) => {
-                                const [h, m] = time.split(':').map(Number);
-                                return h * 60 + m;
-                            };
 
                             // Strategies require access to existing trip doc first
                             const tripDoc = await Trip.findById(tripId);
@@ -163,8 +174,9 @@ export async function POST(request: NextRequest) {
 
                             const newItems = actionData.items.map((item: any) => {
                                 const day = item.day || 1;
-                                const startTime = item.startTime || '09:00';
-                                const endTime = item.endTime || '11:00';
+                                // Validate and sanitize times - use defaults if invalid format
+                                const startTime = isValidTime(item.startTime) ? item.startTime : '09:00';
+                                const endTime = isValidTime(item.endTime) ? item.endTime : '11:00';
                                 const slotKey = `${day}-${startTime}-${endTime}`;
 
                                 let groupId = undefined;

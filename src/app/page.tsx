@@ -227,8 +227,8 @@ export default function HomePage() {
                     min="2"
                     max="50"
                     className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white focus-glow transition-smooth hover:border-violet-500/50"
-                    value={formData.groupSize}
-                    onChange={(e) => setFormData({ ...formData, groupSize: parseInt(e.target.value) })}
+                    value={formData.groupSize || ''}
+                    onChange={(e) => setFormData({ ...formData, groupSize: parseInt(e.target.value) || 0 })}
                   />
                 </div>
                 <div>
@@ -255,8 +255,8 @@ export default function HomePage() {
                     min="1"
                     max="30"
                     className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white focus-glow transition-smooth hover:border-violet-500/50"
-                    value={formData.daysCount}
-                    onChange={(e) => setFormData({ ...formData, daysCount: parseInt(e.target.value) })}
+                    value={formData.daysCount || ''}
+                    onChange={(e) => setFormData({ ...formData, daysCount: parseInt(e.target.value) || 0 })}
                   />
                 </div>
                 <div>
@@ -266,8 +266,8 @@ export default function HomePage() {
                     min="0"
                     max="30"
                     className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white focus-glow transition-smooth hover:border-violet-500/50"
-                    value={formData.nightsCount}
-                    onChange={(e) => setFormData({ ...formData, nightsCount: parseInt(e.target.value) })}
+                    value={formData.nightsCount || ''}
+                    onChange={(e) => setFormData({ ...formData, nightsCount: parseInt(e.target.value) || 0 })}
                   />
                 </div>
               </div>

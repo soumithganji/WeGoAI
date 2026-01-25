@@ -344,7 +344,7 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
         )
 
         general_task = Task(
-            description=f"""Create a general itinerary for: {user_query}
+            description=f"""Create a COMPLETE FULL-DAY itinerary for: {user_query}
             
             Trip settings: {context_str}
             
@@ -352,10 +352,12 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
             1. For meals, use GENERIC titles: "Breakfast", "Lunch", "Dinner" - no restaurant names.
             2. For attractions, use well-known landmarks (e.g., "Visit Eiffel Tower").
             3. Keep descriptions to MAX 5 words each (very brief).
-            4. Limit to 3-4 activities per day (including meals) to keep it concise.
-            5. OUTPUT A SINGLE JSON OBJECT containing ALL items for ALL days in one 'items' array.
-            6. Do NOT output multiple JSON blocks.
-            7. Set "replacementStrategy" to "replace" (default for new plans).
+            4. IMPORTANT: Include 5-6 activities per day covering MORNING, AFTERNOON, and EVENING.
+            5. EVERY day MUST have: Breakfast (08:00-09:00), morning activity, Lunch (12:00-13:30), afternoon activity, Dinner (19:00-20:30), and optionally an evening activity.
+            6. OUTPUT A SINGLE JSON OBJECT containing ALL items for ALL days in one 'items' array.
+            7. Do NOT output multiple JSON blocks.
+            8. Set "replacementStrategy" to "replace" (default for new plans).
+            9. CRITICAL: ALL startTime and endTime fields MUST be in 24-hour "HH:MM" format (e.g., "09:00", "14:30"). NEVER use text like "Not specified" or "TBD" - always use actual times.
             
             OUTPUT ONLY THIS JSON FORMAT (no other text):
             
@@ -364,9 +366,12 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
                 "action": "add_items",
                 "replacementStrategy": "replace",
                 "items": [
-                    {{"title": "Visit Eiffel Tower", "description": "Iconic landmark views", "day": 1, "startTime": "09:00", "endTime": "11:00", "location": "Eiffel Tower"}},
-                    {{"title": "Lunch", "description": "Midday meal", "day": 1, "startTime": "12:00", "endTime": "13:30", "location": "Central area"}},
-                    {{"title": "Visit Notre Dame", "description": "Cathedral visit", "day": 2, "startTime": "09:00", "endTime": "11:00", "location": "Notre Dame"}}
+                    {{"title": "Breakfast", "description": "Morning meal", "day": 1, "startTime": "08:00", "endTime": "09:00", "location": "Hotel area"}},
+                    {{"title": "Visit Eiffel Tower", "description": "Iconic landmark views", "day": 1, "startTime": "09:30", "endTime": "12:00", "location": "Eiffel Tower"}},
+                    {{"title": "Lunch", "description": "Midday meal", "day": 1, "startTime": "12:30", "endTime": "14:00", "location": "Central area"}},
+                    {{"title": "Louvre Museum", "description": "Art masterpieces", "day": 1, "startTime": "14:30", "endTime": "17:30", "location": "Louvre Museum"}},
+                    {{"title": "Dinner", "description": "Evening meal", "day": 1, "startTime": "19:00", "endTime": "20:30", "location": "Central area"}},
+                    {{"title": "Seine River Cruise", "description": "Night city views", "day": 1, "startTime": "21:00", "endTime": "22:30", "location": "Seine River"}}
                 ]
             }}
             ```""",
