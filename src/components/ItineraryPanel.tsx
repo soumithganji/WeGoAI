@@ -162,6 +162,11 @@ export default function ItineraryPanel({
                     + Add
                 </button>
             </div>
+            {/* DEBUG INFO */}
+            <div className="px-5 py-2 text-xs text-yellow-400 bg-black/20">
+                Debug: {itinerary.length} items. With GroupID: {itinerary.filter(i => !!i.groupId).length}.
+                Examples: {itinerary.slice(0, 3).map(i => `${i.title} (${i.groupId || 'none'})`).join(', ')}
+            </div>
 
             {/* Add Item Modal */}
             {isAddingItem && (

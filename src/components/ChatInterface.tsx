@@ -22,7 +22,7 @@ export default function ChatInterface({
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
     const [isNearBottom, setIsNearBottom] = useState(true);
 
     const scrollToBottom = () => {
@@ -46,20 +46,41 @@ export default function ChatInterface({
         }
     }, [messages, isNearBottom]);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const sendMessage = async () => {
         if (!input.trim() || isLoading) return;
 
         const message = input.trim();
         setInput('');
+        if (inputRef.current) {
+            inputRef.current.style.height = 'auto';
+        }
         setIsLoading(true);
 
         await onSendMessage(message);
         setIsLoading(false);
     };
 
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        await sendMessage();
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    };
+
+    useEffect(() => {
+        if (inputRef.current) {
+            inputRef.current.style.height = 'auto';
+            inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
+        }
+    }, [input]);
+
     const handleAIMention = () => {
-        setInput(input + '@weai ');
+        setInput('@weai ' + input);
         inputRef.current?.focus();
     };
 
@@ -167,7 +188,7 @@ export default function ChatInterface({
 
             {/* Input */}
             <form onSubmit={handleSubmit} className="p-4 bg-slate-900/80 backdrop-blur-xl border-t border-white/5">
-                <div className="flex gap-3">
+                <div className="flex gap-3 items-end">
                     <button
                         type="button"
                         onClick={handleAIMention}
@@ -175,13 +196,15 @@ export default function ChatInterface({
                     >
                         @weai
                     </button>
-                    <input
+                    <textarea
                         ref={inputRef}
-                        type="text"
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={handleKeyDown}
                         placeholder="Type a message..."
-                        className="flex-1 px-5 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus-glow transition-smooth hover:border-violet-500/30"
+                        rows={1}
+                        className="flex-1 px-5 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus-glow transition-smooth hover:border-violet-500/30 resize-none"
+                        style={{ minHeight: '44px', maxHeight: '120px' }}
                     />
                     <button
                         type="submit"

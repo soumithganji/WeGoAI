@@ -86,9 +86,17 @@ export async function POST(request: NextRequest) {
                 const aiResult = await aiResponse.json();
                 let finalContent = aiResult.result || '';
 
+                // DEBUG LOGGING
+                try {
+                    const fs = require('fs');
+                    const path = require('path');
+                    const logPath = path.join(process.cwd(), 'route_debug.log');
+                    const logMsg = `\n--- [${new Date().toISOString()}] AI RESPONSE ---\n${finalContent}\n----------------\n`;
+                    fs.appendFileSync(logPath, logMsg);
+                } catch (e) { console.error('Log failed', e); }
+
                 console.log('=== AI RESPONSE DEBUG ===');
                 console.log('Full AI Result length:', finalContent.length);
-                console.log('First 500 chars:', finalContent.substring(0, 500));
 
                 // Check for JSON action block (with or without code fences)
                 let jsonMatch = finalContent.match(/```json\s*([\s\S]*?)\s*```/);
@@ -161,6 +169,8 @@ export async function POST(request: NextRequest) {
                 if (jsonString) {
                     try {
                         const actionData = JSON.parse(jsonString);
+                        console.log('PARSED ACTION DATA:', JSON.stringify(actionData, null, 2));
+
                         if (actionData.action === 'add_items' && Array.isArray(actionData.items)) {
                             // Extract strategy
                             const replacementStrategy = actionData.replacementStrategy || 'replace';
@@ -357,6 +367,31 @@ export async function POST(request: NextRequest) {
 
                             let addedCount = 0;
                             let rescheduledCount = 0;
+                            let removedCount = 0;
+
+                            // Handle explicit item removal (replacing generic placeholders)
+                            if (Array.isArray(actionData.itemsToRemove) && actionData.itemsToRemove.length > 0) {
+                                const initialLength = tripDoc.itinerary.length;
+                                const titlesToRemove = new Set(actionData.itemsToRemove.map((t: string) => t.toLowerCase()));
+
+                                // Get days affected by new items to scope the removal
+                                const affectedDays = new Set(
+                                    Array.isArray(actionData.newItems)
+                                        ? actionData.newItems.map((i: any) => i.day || 1)
+                                        : [1]
+                                );
+
+                                tripDoc.itinerary = tripDoc.itinerary.filter((item: any) => {
+                                    // Only remove if it's on an affected day AND matches one of the titles to remove
+                                    if (affectedDays.has(item.day) && titlesToRemove.has(item.title.toLowerCase())) {
+                                        return false;
+                                    }
+                                    return true;
+                                });
+
+                                removedCount = initialLength - tripDoc.itinerary.length;
+                                console.log(`Smart schedule: removed ${removedCount} items matching [${actionData.itemsToRemove.join(', ')}]`);
+                            }
 
                             // First, handle rescheduling existing items
                             if (Array.isArray(actionData.reschedule)) {
@@ -376,7 +411,7 @@ export async function POST(request: NextRequest) {
                             }
 
                             // Then, add new items
-                            if (Array.isArray(actionData.newItems)) {
+                            if (Array.isArray(actionData.newItems) && actionData.newItems.length > 0) {
                                 // Helper to validate HH:MM format
                                 const isValidTime = (time: string) => {
                                     if (!time || typeof time !== 'string') return false;
@@ -387,19 +422,63 @@ export async function POST(request: NextRequest) {
                                     return h >= 0 && h <= 23 && m >= 0 && m <= 59;
                                 };
 
-                                const newItems = actionData.newItems.map((item: any) => ({
-                                    id: uuidv4(),
-                                    title: item.title,
-                                    description: item.description || '',
-                                    day: item.day || 1,
-                                    startTime: isValidTime(item.startTime) ? item.startTime : '09:00',
-                                    endTime: isValidTime(item.endTime) ? item.endTime : '11:00',
-                                    location: item.location || '',
-                                    votes: { yes: [], no: [] },
-                                    status: 'pending',
-                                    suggestedBy: 'ai',
-                                    createdAt: new Date()
-                                }));
+                                // Helper to convert HH:MM to minutes
+                                const toMinutes = (time: string) => {
+                                    if (!isValidTime(time)) return 0;
+                                    const [h, m] = time.split(':').map(Number);
+                                    return h * 60 + m;
+                                };
+
+                                // Helper to convert minutes to HH:MM
+                                const toTimeStr = (mins: number) => {
+                                    const h = Math.floor(mins / 60) % 24;
+                                    const m = mins % 60;
+                                    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                                };
+
+                                const isOptions = actionData.isOptions === true;
+                                const groupId = isOptions ? uuidv4() : undefined;
+
+                                // If options, force shared timing based on the first item
+                                let commonStartTime = '09:00';
+                                let commonEndTime = '11:00';
+                                let commonDuration = 120;
+
+                                if (isOptions) {
+                                    const first = actionData.newItems[0];
+                                    if (isValidTime(first.startTime)) commonStartTime = first.startTime;
+                                    if (first.duration) commonDuration = first.duration;
+
+                                    // Recalculate end time to ensure consistency
+                                    const startMins = toMinutes(commonStartTime);
+                                    const endMins = startMins + commonDuration;
+                                    commonEndTime = toTimeStr(endMins);
+                                }
+
+                                const newItems = actionData.newItems.map((item: any) => {
+                                    // For options, use common times. For distinct items, use their own times.
+                                    const myStartTime = isOptions ? commonStartTime : (isValidTime(item.startTime) ? item.startTime : '09:00');
+                                    const myEndTime = isOptions ? commonEndTime : (isValidTime(item.endTime) ? item.endTime : '11:00');
+                                    const myDuration = isOptions ? commonDuration : (item.duration || 120);
+
+                                    return {
+                                        id: uuidv4(),
+                                        title: item.title,
+                                        description: item.description || '',
+                                        day: item.day || 1,
+                                        startTime: myStartTime,
+                                        endTime: myEndTime,
+                                        duration: myDuration,
+                                        location: item.location || '',
+                                        votes: { yes: [], no: [] },
+                                        status: 'pending',
+                                        suggestedBy: 'ai',
+                                        groupId, // Assign group ID if it's an options group
+                                        createdAt: new Date()
+                                    };
+                                });
+
+                                console.log('GENERATED NEW ITEMS:', JSON.stringify(newItems, null, 2));
 
                                 tripDoc.itinerary.push(...newItems);
                                 addedCount = newItems.length;
@@ -410,12 +489,16 @@ export async function POST(request: NextRequest) {
 
                             // Build user-friendly message
                             let message = '';
-                            if (addedCount > 0 && rescheduledCount > 0) {
+                            if (addedCount > 0 && removedCount > 0) {
+                                message = `I've updated your itinerary by replacing ${removedCount} item${removedCount > 1 ? 's' : ''} with ${addedCount} new option${addedCount > 1 ? 's' : ''}.`;
+                            } else if (addedCount > 0 && rescheduledCount > 0) {
                                 message = `I've added ${addedCount} new activity${addedCount > 1 ? 'ies' : ''} and adjusted the schedule for ${rescheduledCount} existing item${rescheduledCount > 1 ? 's' : ''} to make everything fit!`;
                             } else if (addedCount > 0) {
                                 message = `I've added ${addedCount} new activity${addedCount > 1 ? 'ies' : ''} to your itinerary!`;
                             } else if (rescheduledCount > 0) {
                                 message = `I've adjusted ${rescheduledCount} item${rescheduledCount > 1 ? 's' : ''} in your schedule.`;
+                            } else if (removedCount > 0) {
+                                message = `I've removed ${removedCount} item${removedCount > 1 ? 's' : ''} from your itinerary.`;
                             }
 
                             // Remove the JSON block from response

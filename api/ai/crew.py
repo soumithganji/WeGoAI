@@ -96,8 +96,24 @@ planner_agent = Agent(
     verbose=True
 )
 
+def log_debug(message: str):
+    """Log debug info to a file."""
+    try:
+        with open("ai_debug.log", "a") as f:
+            f.write(f"\n[{pd.Timestamp.now()}] {message}\n")
+    except:
+        pass # strict dependency avoidance
+
 def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: list) -> str:
     """Create and run a crew to generate trip suggestions."""
+    import datetime
+    
+    def log_to_file(tag, content):
+        print(f"\n{'='*20} {tag} {datetime.datetime.now()} {'='*20}")
+        print(str(content))
+        print(f"{'='*50}\n")
+    
+    log_to_file("USER QUERY", user_query)
     
     # Format context for agents
     settings = trip_context.get("settings", {})
@@ -116,6 +132,8 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
     chat_str = "\n".join([f"{m.get('senderName', 'User')}: {m.get('content', '')}" for m in chat_history[-20:]])
     
     itinerary_str = "\\n".join([f"Day {i.get('day')}: {i.get('title')} at {i.get('startTime')}-{i.get('endTime')}" for i in existing_itinerary]) if existing_itinerary else "No items scheduled yet."
+    
+    log_to_file("ITINERARY CONTEXT", itinerary_str)
     
     # Define tasks
     search_task = Task(
@@ -277,25 +295,44 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
             OUTPUT FORMAT:
             You MUST output a JSON with BOTH new items AND any schedule adjustments:
             
-            ```json
             {{
                 "action": "smart_schedule",
+                "isOptions": true,
                 "newItems": [
                     {{
-                        "title": "Scuba Diving at Neil Island",
-                        "description": "Underwater adventure",
+                        "title": "Option A: Scuba Diving",
+                        "description": "Deep dive at Neil Island",
                         "day": 3,
                         "duration": 180,
-                        "location": "Neil Island Dive Center"
+                        "startTime": "09:00",
+                        "endTime": "12:00",
+                        "location": "Neil Island"
+                    }},
+                     {{
+                        "title": "Option B: Glass Bottom Boat",
+                        "description": "Relaxed view of coral",
+                        "day": 3,
+                        "duration": 180,
+                         "startTime": "09:00",
+                        "endTime": "12:00",
+                        "location": "Neil Jetty"
                     }}
                 ],
+                "itemsToRemove": ["Breakfast"],
                 "reschedule": []
             }}
             ```
             
-            If no rescheduling is needed, leave "reschedule" as empty array: []
+            KEY PARAMETERS:
+            - "isOptions": **ALWAYS TRUE** if the user asks for "suggestions", "options", "places", "ideas", "recommendations".
+            - "itemsToRemove": You MUST check the *CURRENT SCHEDULE* and list the exact title of the generic item this replaces (e.g. "Breakfast", "Lunch").
             
-            SEARCH for real places matching the user's request, then create the optimal schedule.
+            CRITICAL INSTRUCTIONS:
+            1. **QUANTITY**: You MUST provide **2 to 3 DIFFERENT options** for the user to choose from. Do NOT provide just one.
+            2. **TIMING**: All options MUST have the **SAME** day, startTime, and duration.
+            3. **REMOVAL**: If there is a generic item like "Breakfast" or "Lunch" at that time, you MUST include it in "itemsToRemove".
+            
+            SEARCH for real places, then create the response with 2-3 options.
             
             CRITICAL: You MUST end your response with the JSON block. Do NOT just list suggestions in text.
             The user CANNOT see text suggestions - they can ONLY see items added to the itinerary via JSON.
@@ -312,6 +349,7 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
         )
         
         result = fast_crew.kickoff()
+        log_to_file("SUGGESTION RESULT", result)
         return str(result)
     
     # FAST PATH: General itinerary planning (no web search needed)

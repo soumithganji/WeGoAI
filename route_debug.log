@@ -1,0 +1,139 @@
+
+--- [2026-01-25T22:58:16.587Z] AI RESPONSE ---
+```json
+{
+  "action": "smart_schedule",
+  "newItems": [
+    {
+      "title": "Breakfast at Sea Sip Restaurant",
+      "description": "Breakfast",
+      "day": 3,
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "location": "Marina Park, Andaman Islands"
+    }
+  ],
+  "reschedule": []
+}
+```
+----------------
+
+--- [2026-01-25T23:00:17.381Z] AI RESPONSE ---
+```json
+{
+  "action": "smart_schedule",
+  "isOptions": true,
+  "newItems": [
+    {
+      "title": "Option A: Anju Coco Resturant",
+      "description": "Breakfast at Anju Coco Resturant",
+      "day": 3,
+      "duration": 60,
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "location": "Port Blair"
+    },
+    {
+      "title": "Option B: Ananda Restaurant",
+      "description": "Breakfast at Ananda Restaurant",
+      "day": 3,
+      "duration": 60,
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "location": "Port Blair"
+    },
+    {
+      "title": "Option C: Sea Sip Restaurant",
+      "description": "Breakfast at Sea Sip Restaurant",
+      "day": 3,
+      "duration": 60,
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "location": "Port Blair"
+    }
+  ],
+  "itemsToRemove": ["Breakfast"],
+  "reschedule": []
+}
+```
+----------------
+
+--- [2026-01-25T23:02:22.368Z] AI RESPONSE ---
+```json
+{
+  "action": "smart_schedule",
+  "isOptions": true,
+  "newItems": [
+    {
+      "title": "Option A: Anju Coco Restaurant",
+      "description": "Popular restaurant for breakfast in Port Blair",
+      "day": 4,
+      "duration": 60,
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "location": "Port Blair"
+    },
+    {
+      "title": "Option B: Ananda Restaurant",
+      "description": "Well-known restaurant for breakfast in Port Blair",
+      "day": 4,
+      "duration": 60,
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "location": "Port Blair"
+    },
+    {
+      "title": "Option C: Sea Sip Restaurant",
+      "description": "Restaurant with a nice view for breakfast in Port Blair",
+      "day": 4,
+      "duration": 60,
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "location": "Port Blair"
+    }
+  ],
+  "itemsToRemove": ["Breakfast"],
+  "reschedule": []
+}
+```
+----------------
+
+--- [2026-01-25T23:06:02.058Z] AI RESPONSE ---
+```
+{
+  "action": "smart_schedule",
+  "isOptions": true,
+  "newItems": [
+    {
+      "title": "Option A: Anju Coco Restaurant",
+      "description": "Breakfast at Anju Coco Restaurant",
+      "day": 7,
+      "duration": 60,
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "location": "Anju Coco Restaurant"
+    },
+    {
+      "title": "Option B: Sea Sip Restaurant",
+      "description": "Breakfast at Sea Sip Restaurant",
+      "day": 7,
+      "duration": 60,
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "location": "Sea Sip Restaurant"
+    },
+    {
+      "title": "Option C: Beach Shell Restaurant",
+      "description": "Breakfast at Beach Shell Restaurant",
+      "day": 7,
+      "duration": 60,
+      "startTime": "08:00",
+      "endTime": "09:00",
+      "location": "Beach Shell Restaurant"
+    }
+  ],
+  "itemsToRemove": ["Breakfast"],
+  "reschedule": []
+}
+```
+----------------
