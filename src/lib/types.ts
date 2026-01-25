@@ -17,8 +17,10 @@ export interface ItineraryItem {
   title: string;
   description: string;
   day: number;
-  startTime: string;
-  endTime: string;
+  startTime?: string;
+  endTime?: string;
+  duration?: number; // in minutes
+  order?: number; // sequence within the day
   location?: string;
   groupId?: string; // For mutually exclusive options
   travelTimeFromPrevious?: number; // in minutes

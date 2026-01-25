@@ -12,7 +12,8 @@ import requests
 llm = ChatNVIDIA(
     model="meta/llama-3.1-70b-instruct",
     api_key=os.environ.get("NVIDIA_NIM_API_KEY"),
-    base_url="https://integrate.api.nvidia.com/v1"
+    base_url="https://integrate.api.nvidia.com/v1",
+    max_tokens=4096  # Ensure enough tokens for full 7-day itineraries
 )
 
 from crewai.tools import tool
@@ -114,7 +115,7 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
     
     chat_str = "\n".join([f"{m.get('senderName', 'User')}: {m.get('content', '')}" for m in chat_history[-20:]])
     
-    itinerary_str = "\n".join([f"Day {i.get('day')}: {i.get('title')} at {i.get('startTime')}" for i in existing_itinerary])
+    itinerary_str = "\\n".join([f"Day {i.get('day')}: {i.get('title')} at {i.get('startTime')}-{i.get('endTime')}" for i in existing_itinerary]) if existing_itinerary else "No items scheduled yet."
     
     # Define tasks
     search_task = Task(
@@ -166,8 +167,7 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
                     "title": "Activity Name",
                     "description": "Brief description",
                     "day": 1,
-                    "startTime": "09:00",
-                    "endTime": "11:00",
+                    "duration": 120,
                     "location": "Address or location name"
                 }}
             ]
@@ -176,8 +176,8 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
         
         "replacementStrategy" must be either "replace" or "append".
         
-        Each item needs: title, description, day (1-based), startTime (HH:MM), endTime (HH:MM), location.
-        Make sure times don't overlap for the same day.""",
+        Each item needs: title, description, day (1-based), duration (in minutes), location.
+        Time fields (startTime/endTime) are OPTIONAL. Use them only if necessary for fixed reservations.""",
         agent=planner_agent,
         expected_output="Top 5 ranked suggestions with reasons, FOLLOWED BY a JSON block with action: add_items and the items array.",
     )
@@ -240,7 +240,8 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
 
     # FAST PATH: Targeted Suggestions (Search + Format in one step)
     # optimizing latency by using single agent instead of 3
-    is_suggestion_request = any(w in query_lower for w in ["suggest", "recommend", "options", "places", "spots", "ideas"])
+    # Also captures "add X" requests which should go through smart scheduling
+    is_suggestion_request = any(w in query_lower for w in ["suggest", "recommend", "options", "places", "spots", "ideas", "add", "include", "want", "need"])
     
     if is_suggestion_request:
         # Create a specialized agent that can search AND format
@@ -257,52 +258,50 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
             description=f"""User Request: {user_query}
             
             Trip Context: {context_str}
-            Chat History Summary:
-            {chat_str}
             
-            Your goal is to:
-            1. Search for real, high-quality options that match the user's request.
-            2. Select the top 3-5 best options.
-            3. Format them IMMEDIATELY as a JSON object for the itinerary.
+            CURRENT SCHEDULE (analyze this carefully):
+            {itinerary_str}
             
-            CRITICAL: The user wants to SEE these options in their itinerary panel to vote on them.
+            YOUR TASK: Intelligently add the requested activity to the schedule.
             
-            OUTPUT RULES:
-            - Find REAL places with real names and locations.
-            - If the user specifies a day (e.g., "day 2"), use that. Otherwise use Day 1.
-            - Pick a logical time slot (e.g., 19:00-21:00 for dinner).
-            - All options can share the same time slot (so the user can pick one).
-            - Determine "replacementStrategy": "append" if user asked for "more/other", "replace" otherwise.
-            - END your response with the JSON block.
+            SCHEDULING STRATEGY:
+            1. Analyze the current schedule for the relevant day(s).
+            2. Fit the new activity into the day based on feasibility (don't overfill the day).
+            3. New activity should have a REALISTIC duration (scuba diving: 120-180 mins, beach visit: 120 mins, etc.).
             
-            JSON FORMAT:
+            ITEM PRIORITY (which can be shortened/moved):
+            - FIXED (don't change): Breakfast, Lunch, Dinner, airport transfers
+            - IMPORTANT (minimize changes): Tours with tickets, activities with reservations
+            - FLEXIBLE (can shorten/move): Beach visits, sightseeing, free time, generic activities
+            
+            OUTPUT FORMAT:
+            You MUST output a JSON with BOTH new items AND any schedule adjustments:
+            
             ```json
             {{
-                "action": "add_items",
-                "replacementStrategy": "replace",
-                "items": [
+                "action": "smart_schedule",
+                "newItems": [
                     {{
-                        "title": "Name of Place 1",
-                        "description": "Why it's good (brief)",
-                        "day": 1,
-                        "startTime": "19:00",
-                        "endTime": "21:00",
-                        "location": "Real Address or Area"
-                    }},
-                    {{
-                        "title": "Name of Place 2",
-                        "description": "Why it's good (brief)",
-                        "day": 1,
-                        "startTime": "19:00",
-                        "endTime": "21:00",
-                        "location": "Real Address or Area"
+                        "title": "Scuba Diving at Neil Island",
+                        "description": "Underwater adventure",
+                        "day": 3,
+                        "duration": 180,
+                        "location": "Neil Island Dive Center"
                     }}
-                ]
+                ],
+                "reschedule": []
             }}
             ```
+            
+            If no rescheduling is needed, leave "reschedule" as empty array: []
+            
+            SEARCH for real places matching the user's request, then create the optimal schedule.
+            
+            CRITICAL: You MUST end your response with the JSON block. Do NOT just list suggestions in text.
+            The user CANNOT see text suggestions - they can ONLY see items added to the itinerary via JSON.
             """,
             agent=suggestion_agent,
-            expected_output="Top suggestions followed by a JSON block with action: add_items."
+            expected_output="You MUST output a JSON block with action: smart_schedule. This is REQUIRED, not optional."
         )
         
         fast_crew = Crew(
@@ -328,18 +327,19 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
     ])
     
     if is_general_planning and not needs_web_search:
-        # initialize faster LLM for speed
-        fast_llm = ChatNVIDIA(
-            model="meta/llama-3.1-8b-instruct",
+        # Use 70B model with higher max_tokens for longer trips (7 days = ~42 items)
+        planning_llm = ChatNVIDIA(
+            model="meta/llama-3.1-70b-instruct",
             api_key=os.environ.get("NVIDIA_NIM_API_KEY"),
-            base_url="https://integrate.api.nvidia.com/v1"
+            base_url="https://integrate.api.nvidia.com/v1",
+            max_tokens=4096  # Ensure enough tokens for full 7-day itinerary
         )
         
         fast_planner_agent = Agent(
             role="Fast Trip Planner",
             goal="Create valid JSON itineraries quickly",
             backstory="You are an efficient travel planner who works instantly.",
-            llm=fast_llm,
+            llm=planning_llm,
             verbose=True
         )
 
@@ -353,11 +353,11 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
             2. For attractions, use well-known landmarks (e.g., "Visit Eiffel Tower").
             3. Keep descriptions to MAX 5 words each (very brief).
             4. IMPORTANT: Include 5-6 activities per day covering MORNING, AFTERNOON, and EVENING.
-            5. EVERY day MUST have: Breakfast (08:00-09:00), morning activity, Lunch (12:00-13:30), afternoon activity, Dinner (19:00-20:30), and optionally an evening activity.
+            5. EVERY day MUST have: Breakfast, morning activity, Lunch, afternoon activity, Dinner, and optionally an evening activity.
             6. OUTPUT A SINGLE JSON OBJECT containing ALL items for ALL days in one 'items' array.
             7. Do NOT output multiple JSON blocks.
             8. Set "replacementStrategy" to "replace" (default for new plans).
-            9. CRITICAL: ALL startTime and endTime fields MUST be in 24-hour "HH:MM" format (e.g., "09:00", "14:30"). NEVER use text like "Not specified" or "TBD" - always use actual times.
+            9. CRITICAL: Use "duration" (in minutes). Time fields (startTime/endTime) are OPTIONAL.
             
             OUTPUT ONLY THIS JSON FORMAT (no other text):
             
@@ -366,12 +366,12 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
                 "action": "add_items",
                 "replacementStrategy": "replace",
                 "items": [
-                    {{"title": "Breakfast", "description": "Morning meal", "day": 1, "startTime": "08:00", "endTime": "09:00", "location": "Hotel area"}},
-                    {{"title": "Visit Eiffel Tower", "description": "Iconic landmark views", "day": 1, "startTime": "09:30", "endTime": "12:00", "location": "Eiffel Tower"}},
-                    {{"title": "Lunch", "description": "Midday meal", "day": 1, "startTime": "12:30", "endTime": "14:00", "location": "Central area"}},
-                    {{"title": "Louvre Museum", "description": "Art masterpieces", "day": 1, "startTime": "14:30", "endTime": "17:30", "location": "Louvre Museum"}},
-                    {{"title": "Dinner", "description": "Evening meal", "day": 1, "startTime": "19:00", "endTime": "20:30", "location": "Central area"}},
-                    {{"title": "Seine River Cruise", "description": "Night city views", "day": 1, "startTime": "21:00", "endTime": "22:30", "location": "Seine River"}}
+                    {{"title": "Breakfast", "description": "Morning meal", "day": 1, "duration": 60, "location": "Hotel area"}},
+                    {{"title": "Visit Eiffel Tower", "description": "Iconic landmark views", "day": 1, "duration": 150, "location": "Eiffel Tower"}},
+                    {{"title": "Lunch", "description": "Midday meal", "day": 1, "duration": 90, "location": "Central area"}},
+                    {{"title": "Louvre Museum", "description": "Art masterpieces", "day": 1, "duration": 180, "location": "Louvre Museum"}},
+                    {{"title": "Dinner", "description": "Evening meal", "day": 1, "duration": 90, "location": "Central area"}},
+                    {{"title": "Seine River Cruise", "description": "Night city views", "day": 1, "duration": 90, "location": "Seine River"}}
                 ]
             }}
             ```""",
@@ -402,27 +402,26 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
             Extract the most recent suggested items from the AI's previous messages in the chat history.
             
             CRITICAL: These are MUTUALLY EXCLUSIVE OPTIONS - the group will vote to pick ONE.
-            Therefore, ALL items MUST have the SAME day and SAME time slot.
+            Therefore, ALL items MUST have the SAME day and SAME duration/slot.
             
             Format them as a valid JSON object:
             {{
                 "action": "add_items",
                 "replacementStrategy": "append",
+                "isOptions": true,
                 "items": [
                     {{
                         "title": "Option 1 Name",
                         "description": "Brief description",
                         "day": 1,
-                        "startTime": "20:00",
-                        "endTime": "23:00",
+                        "duration": 180,
                         "location": "Address"
                     }},
                     {{
                         "title": "Option 2 Name",
                         "description": "Brief description", 
                         "day": 1,
-                        "startTime": "20:00",
-                        "endTime": "23:00",
+                        "duration": 180,
                         "location": "Address"
                     }}
                 ]
@@ -430,12 +429,12 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
             
             RULES:
             1. ALL items MUST have the SAME day number.
-            2. ALL items MUST have the SAME startTime and endTime.
-            3. Pick a reasonable evening time like 20:00-23:00 or 19:00-22:00.
+            2. ALL items MUST have the SAME duration.
+            3. Pick a reasonable evening duration if context implies evening.
             4. Return ONLY the JSON, nothing before it.
             """,
             agent=planner_agent,
-            expected_output="A JSON object with action and items, all sharing the same day and time."
+            expected_output="A JSON object with action and items, all sharing the same day and duration."
         )
         
         # Use simple single-task crew for speed

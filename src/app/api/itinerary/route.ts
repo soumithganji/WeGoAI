@@ -135,6 +135,57 @@ export async function POST(request: NextRequest) {
     }
 }
 
+// PATCH /api/itinerary - Update an itinerary item
+export async function PATCH(request: NextRequest) {
+    try {
+        await connectToDatabase();
+
+        const body = await request.json();
+        const { tripId, itemId, updates, userId } = body;
+
+        if (!tripId || !itemId || !updates) {
+            return NextResponse.json(
+                { error: 'Missing required fields' },
+                { status: 400 }
+            );
+        }
+
+        const trip = await Trip.findById(tripId);
+        if (!trip) {
+            return NextResponse.json({ error: 'Trip not found' }, { status: 404 });
+        }
+
+        const item = trip.itinerary.find((i: any) => i.id === itemId);
+        if (!item) {
+            return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+        }
+
+        // Apply updates
+        if (updates.title) item.title = updates.title;
+        if (updates.description !== undefined) item.description = updates.description;
+        if (updates.location !== undefined) item.location = updates.location;
+        if (updates.startTime !== undefined) item.startTime = updates.startTime;
+        if (updates.endTime !== undefined) item.endTime = updates.endTime;
+        if (updates.duration !== undefined) item.duration = updates.duration;
+        if (updates.day !== undefined) item.day = updates.day;
+
+        // Reset votes if significant changes are made
+        if (updates.title || updates.day || updates.startTime || updates.location) {
+            // Optional: reset votes logic could go here if desired
+            // item.votes = { yes: [], no: [] };
+            // item.status = 'pending';
+        }
+
+        trip.markModified('itinerary');
+        await trip.save();
+
+        return NextResponse.json(item);
+    } catch (error) {
+        console.error('Error updating item:', error);
+        return NextResponse.json({ error: 'Failed to update item' }, { status: 500 });
+    }
+}
+
 // POST /api/itinerary/add - Add item to itinerary (creates poll)
 export async function PUT(request: NextRequest) {
     try {
@@ -155,30 +206,9 @@ export async function PUT(request: NextRequest) {
             return NextResponse.json({ error: 'Trip not found' }, { status: 404 });
         }
 
-        // Check for clashes
-        const newStart = item.startTime;
-        const newEnd = item.endTime;
-        const newDay = item.day;
-
-        const existingItems = trip.itinerary.filter((i: any) =>
-            i.day === newDay && i.status !== 'rejected'
-        );
-
-        for (const existing of existingItems) {
-            if (existing.startTime && newStart && existing.endTime && newEnd) {
-                // Simple time clash detection
-                if (
-                    (newStart >= existing.startTime && newStart < existing.endTime) ||
-                    (newEnd > existing.startTime && newEnd <= existing.endTime)
-                ) {
-                    return NextResponse.json({
-                        error: 'Time clash detected',
-                        clashWith: existing.title,
-                        existingTime: `${existing.startTime} - ${existing.endTime}`
-                    }, { status: 409 });
-                }
-            }
-        }
+        // Find max order for the day to append to end
+        const dayItems = trip.itinerary.filter((i: any) => i.day === (item.day || 1));
+        const maxOrder = dayItems.reduce((max: number, i: any) => Math.max(max, i.order || 0), -1);
 
         const newItem = {
             id: uuidv4(),
@@ -187,8 +217,9 @@ export async function PUT(request: NextRequest) {
             day: item.day || 1,
             startTime: item.startTime || '',
             endTime: item.endTime || '',
+            duration: item.duration || 60,
+            order: maxOrder + 1,
             location: item.location || '',
-            travelTimeFromPrevious: item.travelTimeFromPrevious,
             votes: {
                 yes: suggestedBy !== 'ai' ? [suggestedBy] : [],
                 no: []

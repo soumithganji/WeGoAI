@@ -103,7 +103,12 @@ export default function ItineraryPanel({
     const groupedByDay = Array.from({ length: daysCount }, (_, i) => i + 1).map((day) => ({
         day,
         items: itinerary
-            .filter((item) => item.day === day)
+            .filter((item) => {
+                // Hide rejected items or items where everyone voted no
+                if (item.status === 'rejected') return false;
+                if (memberCount > 0 && item.votes?.no?.length >= memberCount) return false;
+                return item.day === day;
+            })
             .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || '')),
     }));
 
@@ -408,9 +413,11 @@ export default function ItineraryPanel({
                                                                     </p>
                                                                 )}
                                                             </div>
-                                                            <div className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${config.badge} uppercase tracking-wide`}>
-                                                                {item.status}
-                                                            </div>
+                                                            {item.status !== 'approved' && (
+                                                                <div className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${config.badge} uppercase tracking-wide`}>
+                                                                    {item.status}
+                                                                </div>
+                                                            )}
                                                         </div>
 
                                                         {/* Voting */}

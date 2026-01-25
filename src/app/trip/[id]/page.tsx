@@ -2,8 +2,8 @@
 
 import { useState, useEffect, use, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import ChatInterface from '@/components/ChatInterface';
-import ItineraryPanel from '@/components/ItineraryPanel';
+import FloatingChat from '@/components/FloatingChat';
+import DaySections from '@/components/DaySections';
 import { Trip, Message, ItineraryItem } from '@/lib/types';
 
 interface TripPageProps {
@@ -225,6 +225,10 @@ export default function TripPage({ params }: TripPageProps) {
 
             if (data.aiResponse) {
                 setMessages((prev) => [...prev, data.aiResponse]);
+                // Immediately refetch trip data to show any itinerary updates
+                const tripRes = await fetch(`/api/trips/${tripId}`);
+                const tripData = await tripRes.json();
+                setTrip(tripData);
             }
         } catch (error) {
             console.error('Error sending message:', error);
@@ -297,6 +301,45 @@ export default function TripPage({ params }: TripPageProps) {
         }
     };
 
+    const handleUpdateItem = async (itemId: string, updates: Partial<ItineraryItem>) => {
+        try {
+            await fetch('/api/itinerary', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tripId,
+                    itemId,
+                    userId,
+                    updates,
+                }),
+            });
+
+            const tripRes = await fetch(`/api/trips/${tripId}`);
+            setTrip(await tripRes.json());
+        } catch (error) {
+            console.error('Error updating item:', error);
+        }
+    };
+
+    const handleReorderItems = async (dayNumber: number, itemIds: string[]) => {
+        try {
+            await fetch('/api/itinerary/reorder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tripId,
+                    day: dayNumber,
+                    itemIds,
+                }),
+            });
+
+            const tripRes = await fetch(`/api/trips/${tripId}`);
+            setTrip(await tripRes.json());
+        } catch (error) {
+            console.error('Error reordering items:', error);
+        }
+    };
+
     const copyInviteLink = () => {
         const link = `${window.location.origin}/trip/${tripId}/join?code=${trip?.inviteCode}`;
         navigator.clipboard.writeText(link);
@@ -330,9 +373,9 @@ export default function TripPage({ params }: TripPageProps) {
     }
 
     return (
-        <div className="h-screen bg-slate-950 flex flex-col">
+        <div className="min-h-screen bg-slate-950 flex flex-col">
             {/* Header */}
-            <header className="relative z-20 bg-gradient-to-r from-slate-900/90 via-indigo-950/90 to-purple-950/90 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex items-center justify-between animate-fade-in">
+            <header className="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-5">
                     <h1 className="text-xl font-bold text-white flex items-center gap-2">
                         <span className="text-2xl">🌍</span>
@@ -372,12 +415,6 @@ export default function TripPage({ params }: TripPageProps) {
                             }`}
                     >
                         ⚙️ <span className="hidden sm:inline">Settings</span>
-                    </button>
-                    <button
-                        onClick={() => setShowItinerary(!showItinerary)}
-                        className="px-4 py-2 bg-white/10 text-white rounded-xl text-sm font-medium hover:bg-white/20 transition-smooth md:hidden border border-white/10"
-                    >
-                        {showItinerary ? '💬 Chat' : '📋 Itinerary'}
                     </button>
                 </div>
             </header>
@@ -567,32 +604,29 @@ export default function TripPage({ params }: TripPageProps) {
                 </div>
             )}
 
-            {/* Main Content */}
-            <div className="flex-1 flex overflow-hidden">
-                {/* Chat Panel */}
-                <div className={`${showItinerary ? 'hidden md:flex' : 'flex'} flex-1 flex-col`}>
-                    <ChatInterface
-                        tripId={tripId}
-                        userId={userId}
-                        userName={userName}
-                        messages={messages}
-                        onSendMessage={handleSendMessage}
-                    />
-                </div>
-
-                {/* Itinerary Panel */}
-                <div className={`${showItinerary ? 'flex' : 'hidden md:flex'} w-full md:w-[400px] flex-col border-l border-white/10`}>
-                    <ItineraryPanel
-                        tripId={tripId}
-                        userId={userId}
-                        itinerary={trip.itinerary}
-                        memberCount={trip.members.length}
-                        daysCount={trip.settings.daysCount}
-                        onVote={handleVote}
-                        onAddItem={handleAddItem}
-                    />
-                </div>
+            {/* Main Itinerary Content */}
+            <div className="flex-1 overflow-y-auto">
+                <DaySections
+                    tripId={tripId}
+                    userId={userId}
+                    itinerary={trip.itinerary}
+                    memberCount={trip.members.length}
+                    daysCount={trip.settings.daysCount}
+                    onVote={handleVote}
+                    onAddItem={handleAddItem}
+                    onUpdateItem={handleUpdateItem}
+                    onReorderItems={handleReorderItems}
+                />
             </div>
+
+            {/* Floating Chat */}
+            <FloatingChat
+                tripId={tripId}
+                userId={userId}
+                userName={userName}
+                messages={messages}
+                onSendMessage={handleSendMessage}
+            />
         </div>
     );
 }

@@ -84,31 +84,87 @@ export async function POST(request: NextRequest) {
                 });
 
                 const aiResult = await aiResponse.json();
-                let finalContent = aiResult.result;
+                let finalContent = aiResult.result || '';
+
+                console.log('=== AI RESPONSE DEBUG ===');
+                console.log('Full AI Result length:', finalContent.length);
+                console.log('First 500 chars:', finalContent.substring(0, 500));
 
                 // Check for JSON action block (with or without code fences)
                 let jsonMatch = finalContent.match(/```json\s*([\s\S]*?)\s*```/);
                 let jsonString = jsonMatch ? jsonMatch[1] : null;
                 let jsonStartIndex = -1;
 
-                // If no code fence match, try to find raw JSON object
+                console.log('Code fence match found:', !!jsonMatch);
+
+                // If no code fence match, try to find raw JSON object with balanced braces
                 if (!jsonString) {
-                    const rawJsonMatch = finalContent.match(/\{\s*"action"\s*:\s*"add_items"[\s\S]*\}/);
-                    if (rawJsonMatch) {
-                        jsonString = rawJsonMatch[0];
-                        jsonStartIndex = finalContent.indexOf(jsonString);
+                    // Find the start of the JSON object - match add_items, update_items, or smart_schedule
+                    const jsonStartPattern = /\{\s*"action"\s*:\s*"(add_items|update_items|smart_schedule)"/;
+                    const startMatch = finalContent.match(jsonStartPattern);
+
+                    if (startMatch && startMatch.index !== undefined) {
+                        jsonStartIndex = startMatch.index;
+                        // Extract JSON by finding matching closing brace
+                        let braceCount = 0;
+                        let inString = false;
+                        let escaped = false;
+                        let endIndex = -1;
+
+                        for (let i = jsonStartIndex; i < finalContent.length; i++) {
+                            const char = finalContent[i];
+
+                            if (escaped) {
+                                escaped = false;
+                                continue;
+                            }
+
+                            if (char === '\\' && inString) {
+                                escaped = true;
+                                continue;
+                            }
+
+                            if (char === '"' && !escaped) {
+                                inString = !inString;
+                                continue;
+                            }
+
+                            if (!inString) {
+                                if (char === '{') braceCount++;
+                                else if (char === '}') {
+                                    braceCount--;
+                                    if (braceCount === 0) {
+                                        endIndex = i + 1;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (endIndex > jsonStartIndex) {
+                            jsonString = finalContent.substring(jsonStartIndex, endIndex);
+                            console.log('Extracted JSON via balanced braces, length:', jsonString.length);
+                        } else {
+                            console.log('Failed to find balanced closing brace. braceCount at end:', braceCount);
+                        }
+                    } else {
+                        console.log('No add_items pattern found in response');
                     }
                 }
 
-                console.log('AI Result:', finalContent.substring(0, 200));
-                console.log('JSON Match found:', !!jsonString);
+                console.log('JSON string found:', !!jsonString);
+                if (jsonString) {
+                    console.log('JSON string length:', jsonString.length);
+                    console.log('JSON string preview:', jsonString.substring(0, 200));
+                }
 
                 if (jsonString) {
                     try {
                         const actionData = JSON.parse(jsonString);
                         if (actionData.action === 'add_items' && Array.isArray(actionData.items)) {
-                            // Extract strategy (default to 'replace' if not specified, unless it's clearly an append scenario)
+                            // Extract strategy
                             const replacementStrategy = actionData.replacementStrategy || 'replace';
+                            const isOptions = actionData.isOptions === true;
 
                             // Helper to validate HH:MM format
                             const isValidTime = (time: string) => {
@@ -127,115 +183,123 @@ export async function POST(request: NextRequest) {
                                 return h * 60 + m;
                             };
 
-                            // First pass: Count items per time slot to identify actual groups in the NEW data
-                            const slotCounts = new Map<string, number>();
-                            actionData.items.forEach((item: any) => {
-                                const d = item.day || 1;
-                                const s = isValidTime(item.startTime) ? item.startTime : '09:00';
-                                const e = isValidTime(item.endTime) ? item.endTime : '11:00';
-                                const key = `${d}-${s}-${e}`;
-                                slotCounts.set(key, (slotCounts.get(key) || 0) + 1);
-                            });
+                            // Helper to convert minutes to HH:MM
+                            const toTimeStr = (mins: number) => {
+                                const h = Math.floor(mins / 60) % 24;
+                                const m = mins % 60;
+                                return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                            };
 
-                            const itemsByTimeSlot = new Map<string, string>(); // key -> groupId
-
-                            // Strategies require access to existing trip doc first
                             const tripDoc = await Trip.findById(tripId);
                             if (!tripDoc) throw new Error('Trip not found');
 
-                            // Identification of items to remove (for replace strategy)
-                            const itemsToRemove = new Set<string>();
+                            const newItems: any[] = [];
 
-                            // Map to hold target groupIds for APPEND strategy
-                            const targetGroups = new Map<string, string>(); // slotKey -> existingGroupId
+                            if (isOptions) {
+                                // CASE 1: Mutually exclusive options (same time slot)
+                                const groupId = uuidv4();
+                                const day = actionData.items[0]?.day || 1;
 
-                            if (replacementStrategy === 'append') {
-                                // Find existing groups to merge into
-                                actionData.items.forEach((newItem: any) => {
-                                    const d = newItem.day || 1;
-                                    const s = newItem.startTime || '09:00';
-                                    const e = newItem.endTime || '11:00';
-                                    const slotKey = `${d}-${s}-${e}`;
+                                // Determine time slot
+                                let startTime = '20:00'; // Default evening if not specified
+                                let duration = 180;
 
-                                    // Look for existing AI items in this slot
-                                    const existingGroupItem = tripDoc.itinerary.find((i: any) =>
-                                        i.day === d &&
-                                        i.startTime === s &&
-                                        i.endTime === e &&
-                                        i.suggestedBy === 'ai' &&
-                                        i.groupId
-                                    );
+                                // Use first item's time/duration if available
+                                if (actionData.items[0]?.duration) duration = actionData.items[0].duration;
+                                if (isValidTime(actionData.items[0]?.startTime)) startTime = actionData.items[0].startTime;
 
-                                    if (existingGroupItem) {
-                                        targetGroups.set(slotKey, existingGroupItem.groupId);
-                                    }
-                                });
-                            }
+                                const startMins = toMinutes(startTime);
+                                const endMins = startMins + duration;
+                                const endTime = toTimeStr(endMins);
 
-                            const newItems = actionData.items.map((item: any) => {
-                                const day = item.day || 1;
-                                // Validate and sanitize times - use defaults if invalid format
-                                const startTime = isValidTime(item.startTime) ? item.startTime : '09:00';
-                                const endTime = isValidTime(item.endTime) ? item.endTime : '11:00';
-                                const slotKey = `${day}-${startTime}-${endTime}`;
-
-                                let groupId = undefined;
-
-                                // Case 1: Append to existing group
-                                if (replacementStrategy === 'append' && targetGroups.has(slotKey)) {
-                                    groupId = targetGroups.get(slotKey);
-                                }
-                                // Case 2: Create new group if we have multiples in THIS batch
-                                else if ((slotCounts.get(slotKey) || 0) > 1) {
-                                    if (!itemsByTimeSlot.has(slotKey)) {
-                                        itemsByTimeSlot.set(slotKey, uuidv4());
-                                    }
-                                    groupId = itemsByTimeSlot.get(slotKey);
-                                }
-
-                                return {
+                                newItems.push(...actionData.items.map((item: any) => ({
                                     id: uuidv4(),
                                     title: item.title,
                                     description: item.description || '',
-                                    day,
+                                    day: day,
                                     startTime,
                                     endTime,
+                                    duration,
                                     location: item.location || '',
-                                    groupId: groupId,
+                                    groupId,
                                     votes: { yes: [], no: [] },
                                     status: 'pending',
                                     suggestedBy: 'ai',
                                     createdAt: new Date()
-                                };
-                            });
+                                })));
+                            } else {
+                                // CASE 2: Sequential items (schedule them)
+                                // Sort by day to keep structure
+                                const itemsByDay = new Map<number, any[]>();
+                                actionData.items.forEach((item: any) => {
+                                    const d = item.day || 1;
+                                    if (!itemsByDay.has(d)) itemsByDay.set(d, []);
+                                    itemsByDay.get(d)?.push(item);
+                                });
 
-                            // Logic to identify items to replace
-                            if (replacementStrategy === 'replace') {
-                                const genericTitles = ['breakfast', 'lunch', 'dinner'];
+                                // Process each day
+                                itemsByDay.forEach((dayItems, day) => {
+                                    let currentMins = 9 * 60; // Start at 09:00 AM by default
 
-                                newItems.forEach((newItem: any) => {
-                                    const newStart = toMinutes(newItem.startTime);
-                                    const newEnd = toMinutes(newItem.endTime);
-
-                                    tripDoc.itinerary.forEach((existingItem: any) => {
-                                        if (existingItem.day === newItem.day) {
-                                            const existStart = toMinutes(existingItem.startTime);
-                                            const existEnd = toMinutes(existingItem.endTime);
-
-                                            // Overlap check
-                                            if (newStart < existEnd && existStart < newEnd) {
-                                                // Condition 1: It's a generic placeholder
-                                                const isGeneric = genericTitles.includes(existingItem.title.toLowerCase());
-
-                                                // Condition 2: It's a pending AI suggestion we want to supersede
-                                                const isPendingAI = existingItem.suggestedBy === 'ai' && existingItem.status === 'pending';
-
-                                                if (isGeneric || isPendingAI) {
-                                                    itemsToRemove.add(existingItem.id);
-                                                }
-                                            }
+                                    // If appending, find end of last existing item for this day
+                                    if (replacementStrategy === 'append') {
+                                        const existingDayItems = tripDoc.itinerary.filter((i: any) => i.day === day);
+                                        if (existingDayItems.length > 0) {
+                                            // Find max end time
+                                            existingDayItems.forEach((i: any) => {
+                                                if (i.endTime) currentMins = Math.max(currentMins, toMinutes(i.endTime));
+                                            });
+                                            currentMins += 30; // Add 30 min buffer
                                         }
+                                    }
+
+                                    dayItems.forEach((item: any, index: number) => {
+                                        const duration = item.duration || 60;
+
+                                        // Use provided time if valid, otherwise schedule
+                                        let sMins = currentMins;
+                                        if (isValidTime(item.startTime)) {
+                                            sMins = toMinutes(item.startTime);
+                                        }
+
+                                        const eMins = sMins + duration;
+
+                                        newItems.push({
+                                            id: uuidv4(),
+                                            title: item.title,
+                                            description: item.description || '',
+                                            day: day,
+                                            startTime: toTimeStr(sMins),
+                                            endTime: toTimeStr(eMins),
+                                            duration,
+                                            order: index, // sequence
+                                            location: item.location || '',
+                                            votes: { yes: [], no: [] },
+                                            status: 'pending',
+                                            suggestedBy: 'ai',
+                                            createdAt: new Date()
+                                        });
+
+                                        currentMins = eMins + 30; // buffer for next item
                                     });
+                                });
+                            }
+
+                            // Handling replacements
+                            const itemsToRemove = new Set<string>();
+                            if (replacementStrategy === 'replace') {
+                                // Add logic to clear existing items for the affected days
+                                const affectedDays = new Set(newItems.map(i => i.day));
+                                tripDoc.itinerary.forEach((item: any) => {
+                                    if (affectedDays.has(item.day)) {
+                                        // Don't remove things that look like user-added/confirmed items unless specifically requested? 
+                                        // For now, if "replace" strategy is used by AI (usually for full itinerary gen), we replace everything for that day
+                                        // UNLESS it's a "general" generic replace.
+                                        // Let's be safe: only remove AI suggestions or generic items.
+                                        if (item.suggestedBy === 'ai' || ['breakfast', 'lunch', 'dinner'].includes(item.title.toLowerCase())) {
+                                            itemsToRemove.add(item.id);
+                                        }
+                                    }
                                 });
                             }
 
@@ -246,7 +310,7 @@ export async function POST(request: NextRequest) {
 
                             tripDoc.itinerary.push(...newItems);
                             await tripDoc.save();
-                            console.log(`Added ${newItems.length} items to itinerary (Strategy: ${replacementStrategy})`);
+                            console.log(`Added ${newItems.length} items to itinerary`);
 
 
                             // Remove the JSON block from the user-facing message
@@ -286,9 +350,89 @@ export async function POST(request: NextRequest) {
                             // Remove the JSON block
                             if (jsonMatch) finalContent = finalContent.replace(jsonMatch[0], '').trim();
                             else if (jsonStartIndex !== -1) finalContent = finalContent.substring(0, jsonStartIndex).trim();
+                        } else if (actionData.action === 'smart_schedule') {
+                            // Handle intelligent scheduling with both new items and rescheduling
+                            const tripDoc = await Trip.findById(tripId);
+                            if (!tripDoc) throw new Error('Trip not found');
+
+                            let addedCount = 0;
+                            let rescheduledCount = 0;
+
+                            // First, handle rescheduling existing items
+                            if (Array.isArray(actionData.reschedule)) {
+                                for (const reschedule of actionData.reschedule) {
+                                    const item = tripDoc.itinerary.find((i: any) => {
+                                        const titleMatch = i.title.toLowerCase().includes(reschedule.originalTitle.toLowerCase()) ||
+                                            reschedule.originalTitle.toLowerCase().includes(i.title.toLowerCase());
+                                        return titleMatch && i.day === reschedule.day;
+                                    });
+
+                                    if (item) {
+                                        if (reschedule.newStartTime) item.startTime = reschedule.newStartTime;
+                                        if (reschedule.newEndTime) item.endTime = reschedule.newEndTime;
+                                        rescheduledCount++;
+                                    }
+                                }
+                            }
+
+                            // Then, add new items
+                            if (Array.isArray(actionData.newItems)) {
+                                // Helper to validate HH:MM format
+                                const isValidTime = (time: string) => {
+                                    if (!time || typeof time !== 'string') return false;
+                                    const match = time.match(/^(\d{1,2}):(\d{2})$/);
+                                    if (!match) return false;
+                                    const h = parseInt(match[1], 10);
+                                    const m = parseInt(match[2], 10);
+                                    return h >= 0 && h <= 23 && m >= 0 && m <= 59;
+                                };
+
+                                const newItems = actionData.newItems.map((item: any) => ({
+                                    id: uuidv4(),
+                                    title: item.title,
+                                    description: item.description || '',
+                                    day: item.day || 1,
+                                    startTime: isValidTime(item.startTime) ? item.startTime : '09:00',
+                                    endTime: isValidTime(item.endTime) ? item.endTime : '11:00',
+                                    location: item.location || '',
+                                    votes: { yes: [], no: [] },
+                                    status: 'pending',
+                                    suggestedBy: 'ai',
+                                    createdAt: new Date()
+                                }));
+
+                                tripDoc.itinerary.push(...newItems);
+                                addedCount = newItems.length;
+                            }
+
+                            await tripDoc.save();
+                            console.log(`Smart schedule: added ${addedCount} items, rescheduled ${rescheduledCount} items`);
+
+                            // Build user-friendly message
+                            let message = '';
+                            if (addedCount > 0 && rescheduledCount > 0) {
+                                message = `I've added ${addedCount} new activity${addedCount > 1 ? 'ies' : ''} and adjusted the schedule for ${rescheduledCount} existing item${rescheduledCount > 1 ? 's' : ''} to make everything fit!`;
+                            } else if (addedCount > 0) {
+                                message = `I've added ${addedCount} new activity${addedCount > 1 ? 'ies' : ''} to your itinerary!`;
+                            } else if (rescheduledCount > 0) {
+                                message = `I've adjusted ${rescheduledCount} item${rescheduledCount > 1 ? 's' : ''} in your schedule.`;
+                            }
+
+                            // Remove the JSON block from response
+                            if (jsonMatch) {
+                                finalContent = finalContent.replace(jsonMatch[0], '').trim();
+                            } else if (jsonStartIndex !== -1) {
+                                finalContent = finalContent.substring(0, jsonStartIndex).trim();
+                            }
+
+                            if (!finalContent) {
+                                finalContent = message || "I've updated your itinerary!";
+                            }
                         }
                     } catch (e) {
+                        console.error('=== JSON PARSE ERROR ===');
                         console.error('Failed to parse AI action:', e);
+                        console.error('JSON string that failed:', jsonString?.substring(0, 500));
                     }
                 }
 
