@@ -86,15 +86,6 @@ export async function POST(request: NextRequest) {
                 const aiResult = await aiResponse.json();
                 let finalContent = aiResult.result || '';
 
-                // DEBUG LOGGING
-                try {
-                    const fs = require('fs');
-                    const path = require('path');
-                    const logPath = path.join(process.cwd(), 'route_debug.log');
-                    const logMsg = `\n--- [${new Date().toISOString()}] AI RESPONSE ---\n${finalContent}\n----------------\n`;
-                    fs.appendFileSync(logPath, logMsg);
-                } catch (e) { console.error('Log failed', e); }
-
                 console.log('=== AI RESPONSE DEBUG ===');
                 console.log('Full AI Result length:', finalContent.length);
 

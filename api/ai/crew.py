@@ -5,10 +5,11 @@ CrewAI Trip Planner Agents
 import os
 from crewai import Agent, Crew, Task, Process
 from langchain_community.tools import DuckDuckGoSearchRun
+from langchain_community.utilities import GoogleSerperAPIWrapper
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
 import requests
 
-# Initialize NVIDIA NIM LLM
+# Initialize NVIDIA NIM LLM (70B for complex planning)
 llm = ChatNVIDIA(
     model="meta/llama-3.1-70b-instruct",
     api_key=os.environ.get("NVIDIA_NIM_API_KEY"),
@@ -16,13 +17,32 @@ llm = ChatNVIDIA(
     max_tokens=4096  # Ensure enough tokens for full 7-day itineraries
 )
 
+# Fast LLM for suggestions (8B is 4x faster: ~170 tok/s vs ~39 tok/s)
+fast_llm = ChatNVIDIA(
+    model="meta/llama-3.1-8b-instruct",
+    api_key=os.environ.get("NVIDIA_NIM_API_KEY"),
+    base_url="https://integrate.api.nvidia.com/v1",
+    max_tokens=2048
+)
+
 from crewai.tools import tool
 
-# Tool 1: FREE web search (DuckDuckGo)
+# Tool 1: FREE web search (DuckDuckGo) - fallback
 @tool("Web Search")
 def search_tool(query: str):
     """Search for information on the internet. Useful for finding travel options, restaurants, and attractions."""
     return DuckDuckGoSearchRun().run(query)
+
+# Tool 2: FAST web search (Serper) - 10x faster than DuckDuckGo
+@tool("Fast Web Search")
+def fast_search_tool(query: str):
+    """Search the web quickly using Serper API. Returns relevant results for travel, restaurants, and attractions."""
+    api_key = os.environ.get("SERPER_API_KEY")
+    if not api_key:
+        # Fallback to DuckDuckGo if no Serper key
+        return DuckDuckGoSearchRun().run(query)
+    serper = GoogleSerperAPIWrapper(serper_api_key=api_key)
+    return serper.run(query)
 
 # Tool 2: Travel time calculator (OpenRouteService)
 def get_travel_time(origin: str, destination: str) -> str:
@@ -263,12 +283,13 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
     
     if is_suggestion_request:
         # Create a specialized agent that can search AND format
+        # Uses fast_llm (8B, 4x faster) and fast_search_tool (Serper, 10x faster)
         suggestion_agent = Agent(
             role="Local Expert & Planner",
             goal="Find the best places matching the request and format them for the itinerary.",
             backstory="You are a knowledgeable local guide who knows the best spots. You are efficiency-focused and always return structured data.",
-            tools=[search_tool],
-            llm=llm, # Use the 70b model for high quality + correct formatting
+            tools=[fast_search_tool],
+            llm=fast_llm,  # 8B model: 4x faster than 70B
             verbose=True
         )
 
