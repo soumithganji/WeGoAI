@@ -515,9 +515,9 @@ export async function POST(request: NextRequest) {
                             if (addedCount > 0 && removedCount > 0) {
                                 message = `I've updated your itinerary by replacing ${removedCount} item${removedCount > 1 ? 's' : ''} with ${addedCount} new option${addedCount > 1 ? 's' : ''}.`;
                             } else if (addedCount > 0 && rescheduledCount > 0) {
-                                message = `I've added ${addedCount} new activity${addedCount > 1 ? 'ies' : ''} and adjusted the schedule for ${rescheduledCount} existing item${rescheduledCount > 1 ? 's' : ''} to make everything fit!`;
+                                message = `I've added ${addedCount} new ${addedCount > 1 ? 'activities' : 'activity'} and adjusted the schedule for ${rescheduledCount} existing item${rescheduledCount > 1 ? 's' : ''} to make everything fit!`;
                             } else if (addedCount > 0) {
-                                message = `I've added ${addedCount} new activity${addedCount > 1 ? 'ies' : ''} to your itinerary!`;
+                                message = `I've added ${addedCount} new ${addedCount > 1 ? 'activities' : 'activity'} to your itinerary!`;
                             } else if (rescheduledCount > 0) {
                                 message = `I've adjusted ${rescheduledCount} item${rescheduledCount > 1 ? 's' : ''} in your schedule.`;
                             } else if (removedCount > 0) {

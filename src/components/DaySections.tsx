@@ -86,7 +86,7 @@ export default function DaySections({
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-purple-950 p-6">
             {/* Header */}
-            <div className="max-w-4xl mx-auto mb-8">
+            <div className="mb-8 px-4">
                 <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
                     <span className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-2xl shadow-lg shadow-violet-500/30">📋</span>
                     Your Itinerary

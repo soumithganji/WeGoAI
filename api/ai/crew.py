@@ -345,6 +345,15 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
             CURRENT SCHEDULE (analyze this carefully):
             {itinerary_str}
             
+            **DAY VALIDATION (CRITICAL - CHECK THIS FIRST!):**
+            Look at the Trip Context above for "Duration: X days".
+            If the user requests something for a day that DOES NOT EXIST (e.g., "day 4" when trip is only 3 days):
+            - Do NOT output JSON
+            - Instead, respond with a friendly message like: "This trip only has X days. Would you like me to suggest dinner for day X instead?"
+            - Be helpful and offer alternatives within the valid day range (1 to X)
+            
+            If the day IS valid, proceed with your task below:
+            
             YOUR TASK: Intelligently add the requested activity to the schedule.
             
             SCHEDULING STRATEGY:
