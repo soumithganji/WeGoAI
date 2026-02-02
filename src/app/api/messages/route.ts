@@ -98,8 +98,8 @@ export async function POST(request: NextRequest) {
 
                 // If no code fence match, try to find raw JSON object with balanced braces
                 if (!jsonString) {
-                    // Find the start of the JSON object - match add_items, update_items, or smart_schedule
-                    const jsonStartPattern = /\{\s*"action"\s*:\s*"(add_items|update_items|smart_schedule)"/;
+                    // Find the start of the JSON object - match add_items, update_items, remove_items, or smart_schedule
+                    const jsonStartPattern = /\{\s*"action"\s*:\s*"(add_items|update_items|remove_items|smart_schedule)"/;
                     const startMatch = finalContent.match(jsonStartPattern);
 
                     if (startMatch && startMatch.index !== undefined) {
@@ -345,6 +345,38 @@ export async function POST(request: NextRequest) {
                                 if (updatedCount > 0) {
                                     await tripDoc.save();
                                     finalContent = "I've updated the itinerary as requested.";
+                                }
+                            }
+
+                            // Remove the JSON block
+                            if (jsonMatch) finalContent = finalContent.replace(jsonMatch[0], '').trim();
+                            else if (jsonStartIndex !== -1) finalContent = finalContent.substring(0, jsonStartIndex).trim();
+                        } else if (actionData.action === 'remove_items' && Array.isArray(actionData.items)) {
+                            // Handle removing items from the itinerary
+                            const tripDoc = await Trip.findById(tripId);
+                            if (tripDoc) {
+                                const initialLength = tripDoc.itinerary.length;
+
+                                // Build a set of items to remove based on title and day matching
+                                tripDoc.itinerary = tripDoc.itinerary.filter((item: any) => {
+                                    for (const toRemove of actionData.items) {
+                                        const titleMatch = item.title.toLowerCase().includes(toRemove.title.toLowerCase()) ||
+                                            toRemove.title.toLowerCase().includes(item.title.toLowerCase());
+                                        if (titleMatch && item.day === toRemove.day) {
+                                            return false; // Remove this item
+                                        }
+                                    }
+                                    return true; // Keep this item
+                                });
+
+                                const removedCount = initialLength - tripDoc.itinerary.length;
+
+                                if (removedCount > 0) {
+                                    await tripDoc.save();
+                                    console.log(`Removed ${removedCount} items from itinerary`);
+                                    finalContent = `I've removed ${removedCount} item${removedCount > 1 ? 's' : ''} from your itinerary.`;
+                                } else {
+                                    finalContent = "I couldn't find the item(s) you wanted to remove. Please check the item name and try again.";
                                 }
                             }
 

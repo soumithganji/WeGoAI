@@ -85,6 +85,7 @@ export default function ChatInterface({
     };
 
     const formatMessageContent = (content: string) => {
+        if (!content) return null;
         const parts = content.split(/(@weai)/gi);
         return parts.map((part, i) => {
             if (part.toLowerCase() === '@weai') {

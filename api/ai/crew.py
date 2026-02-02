@@ -225,47 +225,91 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
     # FAST PATH: Itinerary modifications (move, update, remove)
     is_modification = any(word in query_lower for word in ["move", "change", "update", "shift", "reschedule", "delete", "remove", "cancel"])
     
+    # Check if this is a removal/deletion request
+    is_removal = any(word in query_lower for word in ["delete", "remove", "cancel"])
+    
     if is_modification:
-        mod_task = Task(
-            description=f"""The user wants to MODIFY the itinerary.
-            
-            User Request: {user_query}
-            
-            Existing Itinerary:
-            {itinerary_str}
-            
-            Trip Settings: {context_str}
-            
-            Identify the item(s) to modify.
-            
-            OUTPUT ONLY JSON (no text) with action "update_items".
-            
-            Format:
-            ```json
-            {{
-                "action": "update_items",
-                "updates": [
-                    {{
-                        "originalTitle": "Exact or partial title of item",
-                        "day": 1,
-                        "newStartTime": "20:00",
-                        "newEndTime": "22:00"
-                    }}
-                ]
-            }}
-            ```
-            
-            For moving items: Update startTime and endTime.
-            For renaming: Add "newTitle": "New Name".
-            
-            RULES:
-            1. Use 24-hour format for times (HH:MM).
-            2. Ensure "day" matches the item's day.
-            3. Output ONLY JSON.
-            """,
-            agent=planner_agent,
-            expected_output="JSON block with action: update_items."
-        )
+        if is_removal:
+            # Handle removal requests with remove_items action
+            mod_task = Task(
+                description=f"""The user wants to REMOVE item(s) from the itinerary.
+                
+                User Request: {user_query}
+                
+                Existing Itinerary:
+                {itinerary_str}
+                
+                Trip Settings: {context_str}
+                
+                Identify the EXACT item(s) to remove based on the user's request.
+                Match the title and day from the existing itinerary.
+                
+                OUTPUT ONLY JSON (no text) with action "remove_items".
+                
+                Format:
+                ```json
+                {{
+                    "action": "remove_items",
+                    "items": [
+                        {{
+                            "title": "Exact title from itinerary",
+                            "day": 1
+                        }}
+                    ]
+                }}
+                ```
+                
+                RULES:
+                1. Use the EXACT title as it appears in the existing itinerary.
+                2. Ensure "day" matches the item's day.
+                3. Output ONLY JSON, no other text.
+                4. If user says "remove breakfast for day 1", find "Breakfast" on day 1.
+                """,
+                agent=planner_agent,
+                expected_output="JSON block with action: remove_items."
+            )
+        else:
+            # Handle other modifications (move, reschedule, rename)
+            mod_task = Task(
+                description=f"""The user wants to MODIFY the itinerary.
+                
+                User Request: {user_query}
+                
+                Existing Itinerary:
+                {itinerary_str}
+                
+                Trip Settings: {context_str}
+                
+                Identify the item(s) to modify.
+                
+                OUTPUT ONLY JSON (no text) with action "update_items".
+                
+                Format:
+                ```json
+                {{
+                    "action": "update_items",
+                    "updates": [
+                        {{
+                            "originalTitle": "Exact or partial title of item",
+                            "day": 1,
+                            "newStartTime": "20:00",
+                            "newEndTime": "22:00"
+                        }}
+                    ]
+                }}
+                ```
+                
+                For moving items: Update startTime and endTime.
+                For renaming: Add "newTitle": "New Name".
+                
+                RULES:
+                1. Use 24-hour format for times (HH:MM).
+                2. Ensure "day" matches the item's day.
+                3. Output ONLY JSON.
+                """,
+                agent=planner_agent,
+                expected_output="JSON block with action: update_items."
+            )
         
         fast_crew = Crew(
             agents=[planner_agent],
