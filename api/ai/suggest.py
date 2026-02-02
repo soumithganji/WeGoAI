@@ -49,6 +49,8 @@ class handler(BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             
+            import traceback
+            traceback.print_exc()
             error_response = {
                 'success': False,
                 'error': str(e)

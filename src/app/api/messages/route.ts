@@ -83,51 +83,50 @@ export async function POST(request: NextRequest) {
                     signal: AbortSignal.timeout(300000)
                 });
 
+
+                // --- ROBUST MULTI-BLOCK JSON PARSING ---
                 const aiResult = await aiResponse.json();
                 let finalContent = aiResult.result || '';
 
-                console.log('=== AI RESPONSE DEBUG ===');
-                console.log('Full AI Result length:', finalContent.length);
+                console.log('================================================================================');
+                console.log('RAW AI RESPONSE START (Length: ' + finalContent.length + ')');
+                console.log(finalContent);
+                console.log('RAW AI RESPONSE END');
+                console.log('================================================================================');
 
-                // Check for JSON action block (with or without code fences)
-                let jsonMatch = finalContent.match(/```json\s*([\s\S]*?)\s*```/);
-                let jsonString = jsonMatch ? jsonMatch[1] : null;
-                let jsonStartIndex = -1;
+                let messageContent = finalContent; // This will be cleaned up
 
-                console.log('Code fence match found:', !!jsonMatch);
+                // Helper to extract loop over all code-fenced JSON blocks
+                // Regex: match ```json or ``` (case insensitive), capture content, match ```
+                const codeFenceRegex = /```(?:json)?\s*([\s\S]*?)\s*```/gi;
+                let match;
+                const jsonBlocks: string[] = [];
 
-                // If no code fence match, try to find raw JSON object with balanced braces
-                if (!jsonString) {
-                    // Find the start of the JSON object - match add_items, update_items, remove_items, or smart_schedule
-                    const jsonStartPattern = /\{\s*"action"\s*:\s*"(add_items|update_items|remove_items|smart_schedule)"/;
+                // 1. Extract all code-fenced JSON blocks
+                while ((match = codeFenceRegex.exec(finalContent)) !== null) {
+                    jsonBlocks.push(match[1]);
+                    // Remove the block from the messageContent
+                    messageContent = messageContent.replace(match[0], '').trim();
+                }
+
+                // 2. If no fenced blocks found, try to find a single raw JSON object
+                if (jsonBlocks.length === 0) {
+                    const jsonStartPattern = /\{\s*"action"\s*:\s*"(add_items|update_items|remove_items|smart_schedule|update_preferences)"/;
                     const startMatch = finalContent.match(jsonStartPattern);
 
                     if (startMatch && startMatch.index !== undefined) {
-                        jsonStartIndex = startMatch.index;
-                        // Extract JSON by finding matching closing brace
+                        // Attempt to balance braces
                         let braceCount = 0;
                         let inString = false;
                         let escaped = false;
                         let endIndex = -1;
+                        const jsonStartIndex = startMatch.index;
 
                         for (let i = jsonStartIndex; i < finalContent.length; i++) {
                             const char = finalContent[i];
-
-                            if (escaped) {
-                                escaped = false;
-                                continue;
-                            }
-
-                            if (char === '\\' && inString) {
-                                escaped = true;
-                                continue;
-                            }
-
-                            if (char === '"' && !escaped) {
-                                inString = !inString;
-                                continue;
-                            }
-
+                            if (escaped) { escaped = false; continue; }
+                            if (char === '\\' && inString) { escaped = true; continue; }
+                            if (char === '"' && !escaped) { inString = !inString; continue; }
                             if (!inString) {
                                 if (char === '{') braceCount++;
                                 else if (char === '}') {
@@ -140,28 +139,24 @@ export async function POST(request: NextRequest) {
                             }
                         }
 
-                        if (endIndex > jsonStartIndex) {
-                            jsonString = finalContent.substring(jsonStartIndex, endIndex);
-                            console.log('Extracted JSON via balanced braces, length:', jsonString.length);
-                        } else {
-                            console.log('Failed to find balanced closing brace. braceCount at end:', braceCount);
+                        if (endIndex !== -1) {
+                            const rawJson = finalContent.substring(jsonStartIndex, endIndex);
+                            jsonBlocks.push(rawJson);
+                            // Remove from message
+                            messageContent = messageContent.replace(rawJson, '').trim();
                         }
-                    } else {
-                        console.log('No add_items pattern found in response');
                     }
                 }
 
-                console.log('JSON string found:', !!jsonString);
-                if (jsonString) {
-                    console.log('JSON string length:', jsonString.length);
-                    console.log('JSON string preview:', jsonString.substring(0, 200));
-                }
+                // 3. Process ALL found JSON blocks
+                let hasProcessedAction = false;
 
-                if (jsonString) {
+                for (const jsonStr of jsonBlocks) {
                     try {
-                        const actionData = JSON.parse(jsonString);
-                        console.log('PARSED ACTION DATA:', JSON.stringify(actionData, null, 2));
+                        const actionData = JSON.parse(jsonStr);
+                        console.log('PROCESSING ACTION:', actionData.action);
 
+                        // --- ACTION: ADD ITEMS ---
                         if (actionData.action === 'add_items' && Array.isArray(actionData.items)) {
                             // Extract strategy
                             const replacementStrategy = actionData.replacementStrategy || 'replace';
@@ -293,10 +288,7 @@ export async function POST(request: NextRequest) {
                                 const affectedDays = new Set(newItems.map(i => i.day));
                                 tripDoc.itinerary.forEach((item: any) => {
                                     if (affectedDays.has(item.day)) {
-                                        // Don't remove things that look like user-added/confirmed items unless specifically requested? 
-                                        // For now, if "replace" strategy is used by AI (usually for full itinerary gen), we replace everything for that day
-                                        // UNLESS it's a "general" generic replace.
-                                        // Let's be safe: only remove AI suggestions or generic items.
+                                        // Only remove AI suggestions or generic items.
                                         if (item.suggestedBy === 'ai' || ['breakfast', 'lunch', 'dinner'].includes(item.title.toLowerCase())) {
                                             itemsToRemove.add(item.id);
                                         }
@@ -313,17 +305,12 @@ export async function POST(request: NextRequest) {
                             await tripDoc.save();
                             console.log(`Added ${newItems.length} items to itinerary`);
 
-
-                            // Remove the JSON block from the user-facing message
-                            if (jsonMatch) {
-                                finalContent = finalContent.replace(jsonMatch[0], '').trim();
-                            } else if (jsonStartIndex !== -1) {
-                                finalContent = finalContent.substring(0, jsonStartIndex).trim();
+                            hasProcessedAction = true;
+                            if (!messageContent) {
+                                messageContent = `I've added ${newItems.length} options to the itinerary for you to vote on. Check out the Itinerary panel!`;
                             }
 
-                            if (!finalContent) {
-                                finalContent = `I've added ${newItems.length} options to the itinerary for you to vote on. Check out the Itinerary panel!`;
-                            }
+                            // --- ACTION: UPDATE ITEMS ---
                         } else if (actionData.action === 'update_items' && Array.isArray(actionData.updates)) {
                             const tripDoc = await Trip.findById(tripId);
                             if (tripDoc) {
@@ -344,203 +331,85 @@ export async function POST(request: NextRequest) {
                                 }
                                 if (updatedCount > 0) {
                                     await tripDoc.save();
-                                    finalContent = "I've updated the itinerary as requested.";
+                                    hasProcessedAction = true;
+                                    if (!messageContent) messageContent = "I've updated the itinerary as requested.";
                                 }
                             }
 
-                            // Remove the JSON block
-                            if (jsonMatch) finalContent = finalContent.replace(jsonMatch[0], '').trim();
-                            else if (jsonStartIndex !== -1) finalContent = finalContent.substring(0, jsonStartIndex).trim();
+                            // --- ACTION: REMOVE ITEMS ---
                         } else if (actionData.action === 'remove_items' && Array.isArray(actionData.items)) {
-                            // Handle removing items from the itinerary
                             const tripDoc = await Trip.findById(tripId);
                             if (tripDoc) {
                                 const initialLength = tripDoc.itinerary.length;
-
-                                // Build a set of items to remove based on title and day matching
                                 tripDoc.itinerary = tripDoc.itinerary.filter((item: any) => {
                                     for (const toRemove of actionData.items) {
                                         const titleMatch = item.title.toLowerCase().includes(toRemove.title.toLowerCase()) ||
                                             toRemove.title.toLowerCase().includes(item.title.toLowerCase());
-                                        if (titleMatch && item.day === toRemove.day) {
-                                            return false; // Remove this item
-                                        }
-                                    }
-                                    return true; // Keep this item
-                                });
-
-                                const removedCount = initialLength - tripDoc.itinerary.length;
-
-                                if (removedCount > 0) {
-                                    await tripDoc.save();
-                                    console.log(`Removed ${removedCount} items from itinerary`);
-                                    finalContent = `I've removed ${removedCount} item${removedCount > 1 ? 's' : ''} from your itinerary.`;
-                                } else {
-                                    finalContent = "I couldn't find the item(s) you wanted to remove. Please check the item name and try again.";
-                                }
-                            }
-
-                            // Remove the JSON block
-                            if (jsonMatch) finalContent = finalContent.replace(jsonMatch[0], '').trim();
-                            else if (jsonStartIndex !== -1) finalContent = finalContent.substring(0, jsonStartIndex).trim();
-                        } else if (actionData.action === 'smart_schedule') {
-                            // Handle intelligent scheduling with both new items and rescheduling
-                            const tripDoc = await Trip.findById(tripId);
-                            if (!tripDoc) throw new Error('Trip not found');
-
-                            let addedCount = 0;
-                            let rescheduledCount = 0;
-                            let removedCount = 0;
-
-                            // Handle explicit item removal (replacing generic placeholders)
-                            if (Array.isArray(actionData.itemsToRemove) && actionData.itemsToRemove.length > 0) {
-                                const initialLength = tripDoc.itinerary.length;
-                                const titlesToRemove = new Set(actionData.itemsToRemove.map((t: string) => t.toLowerCase()));
-
-                                // Get days affected by new items to scope the removal
-                                const affectedDays = new Set(
-                                    Array.isArray(actionData.newItems)
-                                        ? actionData.newItems.map((i: any) => i.day || 1)
-                                        : [1]
-                                );
-
-                                tripDoc.itinerary = tripDoc.itinerary.filter((item: any) => {
-                                    // Only remove if it's on an affected day AND matches one of the titles to remove
-                                    if (affectedDays.has(item.day) && titlesToRemove.has(item.title.toLowerCase())) {
-                                        return false;
+                                        if (titleMatch && item.day === toRemove.day) return false;
                                     }
                                     return true;
                                 });
 
-                                removedCount = initialLength - tripDoc.itinerary.length;
-                                console.log(`Smart schedule: removed ${removedCount} items matching [${actionData.itemsToRemove.join(', ')}]`);
-                            }
-
-                            // First, handle rescheduling existing items
-                            if (Array.isArray(actionData.reschedule)) {
-                                for (const reschedule of actionData.reschedule) {
-                                    const item = tripDoc.itinerary.find((i: any) => {
-                                        const titleMatch = i.title.toLowerCase().includes(reschedule.originalTitle.toLowerCase()) ||
-                                            reschedule.originalTitle.toLowerCase().includes(i.title.toLowerCase());
-                                        return titleMatch && i.day === reschedule.day;
-                                    });
-
-                                    if (item) {
-                                        if (reschedule.newStartTime) item.startTime = reschedule.newStartTime;
-                                        if (reschedule.newEndTime) item.endTime = reschedule.newEndTime;
-                                        rescheduledCount++;
-                                    }
+                                const removedCount = initialLength - tripDoc.itinerary.length;
+                                if (removedCount > 0) {
+                                    await tripDoc.save();
+                                    hasProcessedAction = true;
+                                    if (!messageContent) messageContent = `I've removed ${removedCount} item${removedCount > 1 ? 's' : ''} from your itinerary.`;
+                                } else if (!messageContent) {
+                                    messageContent = "I couldn't find the item(s) you wanted to remove. Please check the item name and try again.";
                                 }
                             }
 
-                            // Then, add new items
-                            if (Array.isArray(actionData.newItems) && actionData.newItems.length > 0) {
-                                // Helper to validate HH:MM format
-                                const isValidTime = (time: string) => {
-                                    if (!time || typeof time !== 'string') return false;
-                                    const match = time.match(/^(\d{1,2}):(\d{2})$/);
-                                    if (!match) return false;
-                                    const h = parseInt(match[1], 10);
-                                    const m = parseInt(match[2], 10);
-                                    return h >= 0 && h <= 23 && m >= 0 && m <= 59;
-                                };
+                            // --- ACTION: UPDATE PREFERENCES ---
+                        } else if (actionData.action === 'update_preferences' && actionData.preferences) {
+                            const tripDoc = await Trip.findById(tripId);
+                            if (tripDoc) {
+                                if (!tripDoc.preferences) tripDoc.preferences = { dietary: [], interests: [], constraints: [], budget: '' };
+                                const newPrefs = actionData.preferences;
+                                let updatedCount = 0;
 
-                                // Helper to convert HH:MM to minutes
-                                const toMinutes = (time: string) => {
-                                    if (!isValidTime(time)) return 0;
-                                    const [h, m] = time.split(':').map(Number);
-                                    return h * 60 + m;
-                                };
-
-                                // Helper to convert minutes to HH:MM
-                                const toTimeStr = (mins: number) => {
-                                    const h = Math.floor(mins / 60) % 24;
-                                    const m = mins % 60;
-                                    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-                                };
-
-                                const isOptions = actionData.isOptions === true;
-                                const groupId = isOptions ? uuidv4() : undefined;
-
-                                // If options, force shared timing based on the first item
-                                let commonStartTime = '09:00';
-                                let commonEndTime = '11:00';
-                                let commonDuration = 120;
-
-                                if (isOptions) {
-                                    const first = actionData.newItems[0];
-                                    if (isValidTime(first.startTime)) commonStartTime = first.startTime;
-                                    if (first.duration) commonDuration = first.duration;
-
-                                    // Recalculate end time to ensure consistency
-                                    const startMins = toMinutes(commonStartTime);
-                                    const endMins = startMins + commonDuration;
-                                    commonEndTime = toTimeStr(endMins);
+                                if (Array.isArray(newPrefs.dietary)) {
+                                    const set = new Set([...(tripDoc.preferences.dietary || []), ...newPrefs.dietary]);
+                                    if (set.size > (tripDoc.preferences.dietary?.length || 0)) { tripDoc.preferences.dietary = Array.from(set); updatedCount++; }
+                                }
+                                if (Array.isArray(newPrefs.interests)) {
+                                    const set = new Set([...(tripDoc.preferences.interests || []), ...newPrefs.interests]);
+                                    if (set.size > (tripDoc.preferences.interests?.length || 0)) { tripDoc.preferences.interests = Array.from(set); updatedCount++; }
+                                }
+                                if (Array.isArray(newPrefs.constraints)) {
+                                    const set = new Set([...(tripDoc.preferences.constraints || []), ...newPrefs.constraints]);
+                                    if (set.size > (tripDoc.preferences.constraints?.length || 0)) { tripDoc.preferences.constraints = Array.from(set); updatedCount++; }
+                                }
+                                if (newPrefs.budget && tripDoc.preferences.budget !== newPrefs.budget) {
+                                    tripDoc.preferences.budget = newPrefs.budget;
+                                    updatedCount++;
                                 }
 
-                                const newItems = actionData.newItems.map((item: any) => {
-                                    // For options, use common times. For distinct items, use their own times.
-                                    const myStartTime = isOptions ? commonStartTime : (isValidTime(item.startTime) ? item.startTime : '09:00');
-                                    const myEndTime = isOptions ? commonEndTime : (isValidTime(item.endTime) ? item.endTime : '11:00');
-                                    const myDuration = isOptions ? commonDuration : (item.duration || 120);
-
-                                    return {
-                                        id: uuidv4(),
-                                        title: item.title,
-                                        description: item.description || '',
-                                        day: item.day || 1,
-                                        startTime: myStartTime,
-                                        endTime: myEndTime,
-                                        duration: myDuration,
-                                        location: item.location || '',
-                                        votes: { yes: [], no: [] },
-                                        status: 'pending',
-                                        suggestedBy: 'ai',
-                                        groupId, // Assign group ID if it's an options group
-                                        createdAt: new Date()
-                                    };
-                                });
-
-                                console.log('GENERATED NEW ITEMS:', JSON.stringify(newItems, null, 2));
-
-                                tripDoc.itinerary.push(...newItems);
-                                addedCount = newItems.length;
+                                if (updatedCount > 0) {
+                                    await tripDoc.save();
+                                    console.log('Updated preferences');
+                                    hasProcessedAction = true;
+                                }
                             }
 
-                            await tripDoc.save();
-                            console.log(`Smart schedule: added ${addedCount} items, rescheduled ${rescheduledCount} items`);
-
-                            // Build user-friendly message
-                            let message = '';
-                            if (addedCount > 0 && removedCount > 0) {
-                                message = `I've updated your itinerary by replacing ${removedCount} item${removedCount > 1 ? 's' : ''} with ${addedCount} new option${addedCount > 1 ? 's' : ''}.`;
-                            } else if (addedCount > 0 && rescheduledCount > 0) {
-                                message = `I've added ${addedCount} new ${addedCount > 1 ? 'activities' : 'activity'} and adjusted the schedule for ${rescheduledCount} existing item${rescheduledCount > 1 ? 's' : ''} to make everything fit!`;
-                            } else if (addedCount > 0) {
-                                message = `I've added ${addedCount} new ${addedCount > 1 ? 'activities' : 'activity'} to your itinerary!`;
-                            } else if (rescheduledCount > 0) {
-                                message = `I've adjusted ${rescheduledCount} item${rescheduledCount > 1 ? 's' : ''} in your schedule.`;
-                            } else if (removedCount > 0) {
-                                message = `I've removed ${removedCount} item${removedCount > 1 ? 's' : ''} from your itinerary.`;
-                            }
-
-                            // Remove the JSON block from response
-                            if (jsonMatch) {
-                                finalContent = finalContent.replace(jsonMatch[0], '').trim();
-                            } else if (jsonStartIndex !== -1) {
-                                finalContent = finalContent.substring(0, jsonStartIndex).trim();
-                            }
-
-                            if (!finalContent) {
-                                finalContent = message || "I've updated your itinerary!";
+                            // If this was an implicit update (no text), notify user
+                            if (!messageContent.trim()) {
+                                messageContent = "I've noted your preferences for the trip!";
                             }
                         }
                     } catch (e) {
-                        console.error('=== JSON PARSE ERROR ===');
-                        console.error('Failed to parse AI action:', e);
-                        console.error('JSON string that failed:', jsonString?.substring(0, 500));
+                        console.error('Failed to process JSON block:', e);
                     }
                 }
+
+                // Clean up any leaked "Thought:" or "Action:" lines if verbose mode leaked them
+                // Regex to remove "Thought: ... \n" lines if they appear
+                messageContent = messageContent.replace(/^Thought:.*$/gm, '').trim();
+                messageContent = messageContent.replace(/^Action:.*$/gm, '').trim();
+
+                // Final clean
+                finalContent = messageContent.trim();
+                if (!finalContent) finalContent = "I've updated the trip plan!";
 
                 // Save AI response as a message
                 if (aiResult.success) {

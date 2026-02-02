@@ -4,7 +4,6 @@ CrewAI Trip Planner Agents
 """
 import os
 from crewai import Agent, Crew, Task, Process
-from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_community.utilities import GoogleSerperAPIWrapper
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
 import requests
@@ -27,20 +26,13 @@ fast_llm = ChatNVIDIA(
 
 from crewai.tools import tool
 
-# Tool 1: FREE web search (DuckDuckGo) - fallback
-@tool("Web Search")
-def search_tool(query: str):
-    """Search for information on the internet. Useful for finding travel options, restaurants, and attractions."""
-    return DuckDuckGoSearchRun().run(query)
-
-# Tool 2: FAST web search (Serper) - 10x faster than DuckDuckGo
+# Tool 2: FAST web search (Serper)
 @tool("Fast Web Search")
 def fast_search_tool(query: str):
     """Search the web quickly using Serper API. Returns relevant results for travel, restaurants, and attractions."""
     api_key = os.environ.get("SERPER_API_KEY")
     if not api_key:
-        # Fallback to DuckDuckGo if no Serper key
-        return DuckDuckGoSearchRun().run(query)
+        return "Error: Serper API key not found."
     serper = GoogleSerperAPIWrapper(serper_api_key=api_key)
     return serper.run(query)
 
@@ -92,7 +84,7 @@ search_agent = Agent(
     role="Travel Researcher",
     goal="Find the best travel options, restaurants, attractions, and activities. Calculate travel times between places.",
     backstory="You are an expert travel researcher who knows how to find the best local experiences and hidden gems.",
-    tools=[search_tool],
+    tools=[fast_search_tool],
     llm=llm,
     verbose=True
 )
@@ -107,12 +99,22 @@ preference_agent = Agent(
 )
 
 # Agent 3: Planner Agent (TOP - orchestrates the other two)
+# Agent 3: Planner Agent (TOP - orchestrates the other two)
 planner_agent = Agent(
     role="Trip Itinerary Planner",
     goal="Create amazing, well-organized itineraries that balance everyone's preferences. Consider travel times between locations and avoid scheduling conflicts.",
     backstory="You are an experienced travel planner who creates perfect trip itineraries. You always consider practical constraints like travel time and make sure activities flow smoothly.",
     llm=llm,
     allow_delegation=True,
+    verbose=True
+)
+
+# Agent 4: Fast Modifier Agent (using 8B model for simple JSON tasks)
+fast_modifier_agent = Agent(
+    role="Itinerary Modifier",
+    goal="Quickly update or remove items from the itinerary JSON based on user requests.",
+    backstory="You are a precise data assistant. You do not plan trips, you only manipulate JSON data structures accurately.",
+    llm=fast_llm, # Using 8B model for speed and efficiency
     verbose=True
 )
 
@@ -136,7 +138,9 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
     log_to_file("USER QUERY", user_query)
     
     # Format context for agents
+    # Format context for agents
     settings = trip_context.get("settings", {})
+    preferences = trip_context.get("preferences", {})
     existing_itinerary = trip_context.get("itinerary", [])
     
     context_str = f"""
@@ -147,6 +151,12 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
     Landing Time: {settings.get('landingTime', 'Not specified')}
     Departure Time: {settings.get('departureTime', 'Not specified')}
     Hotel: {settings.get('hotel', 'Not specified')}
+
+    USER PREFERENCES (Persistent):
+    - Dietary: {", ".join(preferences.get('dietary', []))}
+    - Interests: {", ".join(preferences.get('interests', []))}
+    - Constraints: {", ".join(preferences.get('constraints', []))}
+    - Budget: {preferences.get('budget', 'Not specified')}
     """
     
     chat_str = "\n".join([f"{m.get('senderName', 'User')}: {m.get('content', '')}" for m in chat_history[-20:]])
@@ -171,9 +181,26 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
         
         {chat_str}
         
-        What does this group like? What should be avoided? Any dietary restrictions? Budget concerns?""",
+        What does this group like? What should be avoided? Any dietary restrictions? Budget concerns?
+        
+        If you find NEW preferences that are not already listed in the Trip Context, you MUST output a JSON block to update them.
+        
+        FORMAT:
+        ```json
+        {{
+            "action": "update_preferences",
+            "preferences": {{
+                "dietary": ["Vegan", "Gluten-free"],
+                "interests": ["Hiking", "History"],
+                "constraints": ["No stairs"],
+                "budget": "Medium"
+            }}
+        }}
+        ```
+        
+        Merge new findings with existing ones. Only output this if there are NEW findings.""",
         agent=preference_agent,
-        expected_output="A summary of group preferences including likes, dislikes, dietary needs, budget level, and activity preferences."
+        expected_output="A text summary of preferences, OPTIONALLY followed by a JSON block with action: update_preferences if new info is found."
     )
     
     planning_task = Task(
@@ -194,8 +221,12 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
         - If query has "more", "additional", "other", "else": replacementStrategy = "append"
         - If query has "instead", "change", "replace", "different", or is a new request: replacementStrategy = "replace"
         
-        IMPORTANT: If the user asks for an itinerary, plan, or suggestions to add, you MUST end your response with a JSON block in this EXACT format:
+        IMPORTANT: You must NOT output conversational text or lists.
+        Output ONLY the JSON block with the action "add_items".
         
+        The user wants to see the items in their itinerary UI, not in the chat text.
+        
+        JSON FORMAT:
         ```json
         {{
             "action": "add_items",
@@ -214,10 +245,11 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
         
         "replacementStrategy" must be either "replace" or "append".
         
-        Each item needs: title, description, day (1-based), duration (in minutes), location.
-        Time fields (startTime/endTime) are OPTIONAL. Use them only if necessary for fixed reservations.""",
+        If the Preference Agent found new preferences, include the "update_preferences" JSON block as well.
+        
+        DO NOT include "Here are the suggestions:" or any other text. JUST THE JSON.""",
         agent=planner_agent,
-        expected_output="Top 5 ranked suggestions with reasons, FOLLOWED BY a JSON block with action: add_items and the items array.",
+        expected_output="A JSON block with action: add_items. NO conversational text.",
     )
 
     query_lower = user_query.lower()
@@ -265,7 +297,7 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
                 3. Output ONLY JSON, no other text.
                 4. If user says "remove breakfast for day 1", find "Breakfast" on day 1.
                 """,
-                agent=planner_agent,
+                agent=fast_modifier_agent,
                 expected_output="JSON block with action: remove_items."
             )
         else:
@@ -307,12 +339,12 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
                 2. Ensure "day" matches the item's day.
                 3. Output ONLY JSON.
                 """,
-                agent=planner_agent,
+                agent=fast_modifier_agent,
                 expected_output="JSON block with action: update_items."
             )
         
         fast_crew = Crew(
-            agents=[planner_agent],
+            agents=[fast_modifier_agent],
             tasks=[mod_task],
             process=Process.sequential,
             verbose=True

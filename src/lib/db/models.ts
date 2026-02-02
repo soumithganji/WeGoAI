@@ -50,6 +50,12 @@ const ItineraryItemSchema = new Schema({
 const TripSchema = new Schema({
     name: { type: String, required: true },
     settings: { type: TripSettingsSchema, required: true },
+    preferences: {
+        dietary: [String],
+        interests: [String],
+        constraints: [String],
+        budget: String
+    },
     members: [TripMemberSchema],
     itinerary: [ItineraryItemSchema],
     inviteCode: { type: String, required: true, unique: true },
