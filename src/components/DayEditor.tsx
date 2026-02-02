@@ -85,26 +85,26 @@ export default function DayEditor({
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             {/* Backdrop */}
             <div
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                className="absolute inset-0 bg-black/20 backdrop-blur-sm"
                 onClick={onClose}
             />
 
             {/* Editor Panel */}
-            <div className="relative w-full max-w-2xl max-h-[90vh] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-slide-up m-4">
+            <div className="relative w-full max-w-2xl max-h-[90vh] bg-white border border-gray-200 rounded-3xl shadow-2xl overflow-hidden animate-slide-up m-4">
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-white/10">
+                <div className="flex items-center justify-between p-6 border-b border-gray-100">
                     <div className="flex items-center gap-4">
-                        <span className="w-12 h-12 bg-gradient-to-br from-violet-600 to-purple-600 rounded-2xl flex items-center justify-center text-white text-lg font-bold shadow-lg shadow-violet-500/30">
+                        <span className="w-12 h-12 bg-black rounded-2xl flex items-center justify-center text-white text-lg font-bold shadow-md">
                             {day}
                         </span>
                         <div>
-                            <h2 className="text-xl font-bold text-white">Edit Day {day}</h2>
-                            <p className="text-sm text-slate-400">{localItems.length} activities</p>
+                            <h2 className="text-xl font-bold text-black">Edit Day {day}</h2>
+                            <p className="text-sm text-gray-500">{localItems.length} activities</p>
                         </div>
                     </div>
                     <button
                         onClick={onClose}
-                        className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-smooth"
+                        className="w-10 h-10 rounded-xl bg-gray-50 hover:bg-gray-100 border border-transparent flex items-center justify-center text-gray-400 hover:text-black transition-all"
                     >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -113,16 +113,18 @@ export default function DayEditor({
                 </div>
 
                 {/* Content */}
-                <div className="p-6 overflow-y-auto max-h-[60vh]">
+                <div className="p-6 overflow-y-auto max-h-[60vh] bg-gray-50/50">
                     {localItems.length === 0 && !isAddingItem ? (
                         <div className="text-center py-12">
-                            <div className="w-16 h-16 rounded-full bg-violet-500/20 flex items-center justify-center mx-auto mb-4">
-                                <span className="text-3xl">📭</span>
+                            <div className="w-16 h-16 rounded-full bg-white border border-gray-200 flex items-center justify-center mx-auto mb-4 shadow-sm">
+                                <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                </svg>
                             </div>
-                            <p className="text-slate-400 mb-4">No activities for this day yet</p>
+                            <p className="text-gray-500 mb-4 font-medium">No activities for this day yet</p>
                             <button
                                 onClick={() => setIsAddingItem(true)}
-                                className="px-6 py-3 bg-gradient-to-r from-violet-600 to-pink-600 text-white rounded-xl font-medium hover:from-violet-500 hover:to-pink-500 transition-smooth"
+                                className="px-6 py-3 bg-black text-white rounded-xl font-medium hover:bg-gray-800 transition-all shadow-lg shadow-gray-200"
                             >
                                 + Add First Activity
                             </button>
@@ -132,21 +134,25 @@ export default function DayEditor({
                             {localItems.map((item, index) => (
                                 <div
                                     key={item.id}
-                                    className="bg-white/5 rounded-xl border border-white/10 p-4 flex items-center gap-4 group hover:bg-white/10 transition-colors"
+                                    className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-4 group hover:border-black transition-all shadow-sm"
                                 >
                                     {/* Order Number */}
-                                    <div className="w-10 h-10 rounded-xl bg-violet-600/20 flex items-center justify-center text-violet-400 font-bold flex-shrink-0">
+                                    <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center text-gray-500 font-bold flex-shrink-0 border border-gray-100">
                                         {index + 1}
                                     </div>
 
                                     {/* Content */}
                                     <div className="flex-1 min-w-0">
-                                        <h3 className="text-white font-medium truncate">{item.title}</h3>
+                                        <h3 className="text-black font-semibold truncate">{item.title}</h3>
                                         <div className="flex items-center gap-3 mt-1">
-                                            <span className="text-sm text-violet-400">{formatDuration(item.duration || 60)}</span>
+                                            <span className="text-sm text-gray-500 bg-gray-100 px-2 py-0.5 rounded text-xs font-medium">{formatDuration(item.duration || 60)}</span>
                                             {item.location && (
-                                                <span className="text-sm text-slate-500 truncate flex items-center gap-1">
-                                                    <span>📍</span> {item.location}
+                                                <span className="text-sm text-gray-500 truncate flex items-center gap-1">
+                                                    <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                    </svg>
+                                                    {item.location}
                                                 </span>
                                             )}
                                         </div>
@@ -157,7 +163,7 @@ export default function DayEditor({
                                         <button
                                             onClick={() => handleMoveUp(index)}
                                             disabled={index === 0}
-                                            className="w-7 h-7 rounded bg-white/10 hover:bg-white/20 flex items-center justify-center text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                            className="w-7 h-7 rounded bg-gray-100 hover:bg-black hover:text-white flex items-center justify-center text-gray-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                                         >
                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
@@ -166,7 +172,7 @@ export default function DayEditor({
                                         <button
                                             onClick={() => handleMoveDown(index)}
                                             disabled={index === localItems.length - 1}
-                                            className="w-7 h-7 rounded bg-white/10 hover:bg-white/20 flex items-center justify-center text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                            className="w-7 h-7 rounded bg-gray-100 hover:bg-black hover:text-white flex items-center justify-center text-gray-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                                         >
                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -178,13 +184,13 @@ export default function DayEditor({
 
                             {/* Add New Item Form */}
                             {isAddingItem ? (
-                                <div className="bg-violet-500/10 rounded-xl border border-violet-500/30 p-4 space-y-3">
+                                <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3 shadow-lg">
                                     <input
                                         type="text"
                                         placeholder="Activity title"
                                         value={newItem.title}
                                         onChange={(e) => setNewItem({ ...newItem, title: e.target.value })}
-                                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus-glow transition-smooth"
+                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-black placeholder-gray-400 focus:bg-white focus:border-black focus:ring-1 focus:ring-black focus:outline-none transition-all"
                                         autoFocus
                                     />
                                     <div className="grid grid-cols-2 gap-3">
@@ -193,21 +199,21 @@ export default function DayEditor({
                                             placeholder="Location (optional)"
                                             value={newItem.location}
                                             onChange={(e) => setNewItem({ ...newItem, location: e.target.value })}
-                                            className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus-glow transition-smooth"
+                                            className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-black placeholder-gray-400 focus:bg-white focus:border-black focus:ring-1 focus:ring-black focus:outline-none transition-all"
                                         />
                                         <div className="flex items-center gap-2">
-                                            <span className="text-sm text-slate-400">Duration:</span>
+                                            <span className="text-sm text-gray-500 font-medium">Duration:</span>
                                             <select
                                                 value={newItem.duration}
                                                 onChange={(e) => setNewItem({ ...newItem, duration: parseInt(e.target.value) })}
-                                                className="flex-1 px-3 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus-glow transition-smooth"
+                                                className="flex-1 px-3 py-3 bg-gray-50 border border-gray-200 rounded-xl text-black focus:bg-white focus:border-black focus:ring-1 focus:ring-black focus:outline-none transition-all"
                                             >
-                                                <option value={30} className="bg-slate-900">30 min</option>
-                                                <option value={60} className="bg-slate-900">1 hour</option>
-                                                <option value={90} className="bg-slate-900">1.5 hours</option>
-                                                <option value={120} className="bg-slate-900">2 hours</option>
-                                                <option value={180} className="bg-slate-900">3 hours</option>
-                                                <option value={240} className="bg-slate-900">4 hours</option>
+                                                <option value={30} className="bg-white text-black">30 min</option>
+                                                <option value={60} className="bg-white text-black">1 hour</option>
+                                                <option value={90} className="bg-white text-black">1.5 hours</option>
+                                                <option value={120} className="bg-white text-black">2 hours</option>
+                                                <option value={180} className="bg-white text-black">3 hours</option>
+                                                <option value={240} className="bg-white text-black">4 hours</option>
                                             </select>
                                         </div>
                                     </div>
@@ -215,13 +221,13 @@ export default function DayEditor({
                                         <button
                                             onClick={handleAddNewItem}
                                             disabled={!newItem.title.trim()}
-                                            className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-medium hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 disabled:cursor-not-allowed transition-smooth"
+                                            className="flex-1 py-3 bg-black text-white rounded-xl font-semibold hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md"
                                         >
                                             Add Activity
                                         </button>
                                         <button
                                             onClick={() => setIsAddingItem(false)}
-                                            className="px-5 py-3 bg-white/10 text-white rounded-xl hover:bg-white/20 transition-smooth"
+                                            className="px-5 py-3 bg-gray-100 text-black rounded-xl hover:bg-gray-200 transition-all font-medium"
                                         >
                                             Cancel
                                         </button>
@@ -230,9 +236,9 @@ export default function DayEditor({
                             ) : (
                                 <button
                                     onClick={() => setIsAddingItem(true)}
-                                    className="w-full py-4 border-2 border-dashed border-white/20 rounded-xl text-slate-400 hover:border-violet-500/50 hover:text-violet-400 transition-colors flex items-center justify-center gap-2"
+                                    className="w-full py-4 border-2 border-dashed border-gray-200 rounded-xl text-gray-400 hover:border-black hover:text-black transition-all flex items-center justify-center gap-2 group font-medium"
                                 >
-                                    <span className="text-xl">+</span>
+                                    <span className="text-2xl group-hover:scale-110 transition-transform">+</span>
                                     Add Activity
                                 </button>
                             )}
@@ -241,16 +247,16 @@ export default function DayEditor({
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-white/10 flex justify-end gap-3">
+                <div className="p-6 border-t border-gray-100 flex justify-end gap-3 bg-white">
                     <button
                         onClick={onClose}
-                        className="px-6 py-2.5 bg-white/10 text-white rounded-xl font-medium hover:bg-white/20 transition-smooth"
+                        className="px-6 py-2.5 bg-gray-100 text-black rounded-xl font-medium hover:bg-gray-200 transition-all"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleSaveOrder}
-                        className="px-6 py-2.5 bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-xl font-medium hover:from-violet-500 hover:to-purple-500 transition-smooth shadow-lg shadow-violet-500/20"
+                        className="px-6 py-2.5 bg-black text-white rounded-xl font-medium hover:bg-gray-800 transition-all shadow-lg shadow-gray-200"
                     >
                         Save Changes
                     </button>

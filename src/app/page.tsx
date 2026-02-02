@@ -135,40 +135,46 @@ export default function HomePage() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-purple-950 relative overflow-hidden">
-      {/* Decorative floating orbs */}
+    <main className="min-h-screen bg-white relative overflow-hidden">
+      {/* Decorative background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-violet-500/20 rounded-full blur-3xl animate-float" />
-        <div className="absolute top-40 right-20 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '1s' }} />
-        <div className="absolute bottom-20 left-1/3 w-80 h-80 bg-pink-500/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s' }} />
+        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-black/5 to-transparent" />
+        <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-black/5 to-transparent" />
       </div>
 
       <div className="container mx-auto px-4 py-16 relative z-10">
         {/* Header */}
         <div className="text-center mb-16 animate-fade-in">
-          <h1 className="text-7xl font-bold text-white mb-4 tracking-tight">
-            🌍 WeGo<span className="gradient-text">AI</span>
+          <h1 className="text-7xl font-bold text-black mb-4 tracking-tight flex items-center justify-center gap-4">
+            <svg className="w-20 h-20 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            WeGo<span className="font-light">AI</span>
           </h1>
-          <p className="text-xl text-slate-300 max-w-2xl mx-auto leading-relaxed">
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
             Plan your perfect group trip with AI-powered suggestions, real-time collaboration, and smart itinerary management.
           </p>
         </div>
 
         <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
           {/* Create Trip Card */}
-          <div className="glass-card rounded-3xl p-8 shadow-2xl animate-slide-up hover-lift" style={{ animationDelay: '0.1s' }}>
-            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-              <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-lg">✨</span>
+          <div className="bg-white rounded-3xl p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 animate-slide-up hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all" style={{ animationDelay: '0.1s' }}>
+            <h2 className="text-2xl font-bold text-black mb-6 flex items-center gap-3">
+              <span className="w-10 h-10 rounded-lg bg-black text-white flex items-center justify-center text-lg">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+              </span>
               Create New Trip
             </h2>
 
             <form onSubmit={handleCreateTrip} className="space-y-5">
               <div>
-                <label className="block text-slate-300 text-sm font-medium mb-2">Your Name</label>
+                <label className="block text-gray-700 text-sm font-medium mb-2">Your Name</label>
                 <input
                   type="text"
                   required
-                  className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus-glow transition-smooth hover:border-violet-500/50"
+                  className="w-full px-4 py-3.5 rounded-xl bg-gray-50 border border-gray-200 text-black placeholder-gray-400 focus:bg-white focus:border-black focus:ring-1 focus:ring-black outline-none transition-all"
                   placeholder="Enter your name"
                   value={formData.creatorName}
                   onChange={(e) => setFormData({ ...formData, creatorName: e.target.value })}
@@ -176,11 +182,11 @@ export default function HomePage() {
               </div>
 
               <div>
-                <label className="block text-slate-300 text-sm font-medium mb-2">Trip Name</label>
+                <label className="block text-gray-700 text-sm font-medium mb-2">Trip Name</label>
                 <input
                   type="text"
                   required
-                  className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus-glow transition-smooth hover:border-violet-500/50"
+                  className="w-full px-4 py-3.5 rounded-xl bg-gray-50 border border-gray-200 text-black placeholder-gray-400 focus:bg-white focus:border-black focus:ring-1 focus:ring-black outline-none transition-all"
                   placeholder="Summer Europe Adventure"
                   value={formData.tripName}
                   onChange={(e) => setFormData({ ...formData, tripName: e.target.value })}
@@ -189,11 +195,11 @@ export default function HomePage() {
 
               {/* Destination with Autocomplete */}
               <div className="relative">
-                <label className="block text-slate-300 text-sm font-medium mb-2">Destination</label>
+                <label className="block text-gray-700 text-sm font-medium mb-2">Destination</label>
                 <input
                   type="text"
                   required
-                  className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus-glow transition-smooth hover:border-violet-500/50"
+                  className="w-full px-4 py-3.5 rounded-xl bg-gray-50 border border-gray-200 text-black placeholder-gray-400 focus:bg-white focus:border-black focus:ring-1 focus:ring-black outline-none transition-all"
                   placeholder="Start typing a city..."
                   value={formData.destination}
                   onChange={(e) => handleInputChange(e.target.value)}
@@ -201,71 +207,69 @@ export default function HomePage() {
                   onBlur={() => setTimeout(() => activeField === 'destination' && setActiveField(null), 200)}
                 />
                 {activeField === 'destination' && suggestions.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-white/10 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
                     {suggestions.map((place) => (
                       <button
                         key={place.id}
                         type="button"
-                        className="w-full px-4 py-3 text-left text-white hover:bg-violet-500/20 transition-colors first:rounded-t-xl last:rounded-b-xl"
+                        className="w-full px-4 py-3 text-left text-black hover:bg-gray-50 transition-colors first:rounded-t-xl last:rounded-b-xl"
                         onClick={() => selectSuggestion(place)}
                       >
                         <div className="font-medium">{place.name}</div>
-                        <div className="text-xs text-slate-400 truncate">{place.displayName}</div>
+                        <div className="text-xs text-gray-500 truncate">{place.displayName}</div>
                       </button>
                     ))}
                   </div>
                 )}
               </div>
 
-
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-slate-300 text-sm font-medium mb-2">Group Size</label>
+                  <label className="block text-gray-700 text-sm font-medium mb-2">Group Size</label>
                   <input
                     type="number"
                     min="2"
                     max="50"
-                    className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white focus-glow transition-smooth hover:border-violet-500/50"
+                    className="w-full px-4 py-3.5 rounded-xl bg-gray-50 border border-gray-200 text-black placeholder-gray-400 focus:bg-white focus:border-black focus:ring-1 focus:ring-black outline-none transition-all"
                     value={formData.groupSize || ''}
                     onChange={(e) => setFormData({ ...formData, groupSize: parseInt(e.target.value) || 0 })}
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 text-sm font-medium mb-2">Age Group</label>
+                  <label className="block text-gray-700 text-sm font-medium mb-2">Age Group</label>
                   <select
-                    className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white focus-glow transition-smooth hover:border-violet-500/50 appearance-none cursor-pointer"
+                    className="w-full px-4 py-3.5 rounded-xl bg-gray-50 border border-gray-200 text-black focus:bg-white focus:border-black focus:ring-1 focus:ring-black outline-none transition-all appearance-none cursor-pointer"
                     value={formData.ageGroup}
                     onChange={(e) => setFormData({ ...formData, ageGroup: e.target.value as any })}
                   >
-                    <option value="kids" className="bg-slate-900 text-white">Kids</option>
-                    <option value="teens" className="bg-slate-900 text-white">Teens</option>
-                    <option value="adults" className="bg-slate-900 text-white">Adults</option>
-                    <option value="seniors" className="bg-slate-900 text-white">Seniors</option>
-                    <option value="mixed" className="bg-slate-900 text-white">Mixed</option>
+                    <option value="kids" className="bg-white text-black">Kids</option>
+                    <option value="teens" className="bg-white text-black">Teens</option>
+                    <option value="adults" className="bg-white text-black">Adults</option>
+                    <option value="seniors" className="bg-white text-black">Seniors</option>
+                    <option value="mixed" className="bg-white text-black">Mixed</option>
                   </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-slate-300 text-sm font-medium mb-2">Days</label>
+                  <label className="block text-gray-700 text-sm font-medium mb-2">Days</label>
                   <input
                     type="number"
                     min="1"
                     max="30"
-                    className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white focus-glow transition-smooth hover:border-violet-500/50"
+                    className="w-full px-4 py-3.5 rounded-xl bg-gray-50 border border-gray-200 text-black placeholder-gray-400 focus:bg-white focus:border-black focus:ring-1 focus:ring-black outline-none transition-all"
                     value={formData.daysCount || ''}
                     onChange={(e) => setFormData({ ...formData, daysCount: parseInt(e.target.value) || 0 })}
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 text-sm font-medium mb-2">Nights</label>
+                  <label className="block text-gray-700 text-sm font-medium mb-2">Nights</label>
                   <input
                     type="number"
                     min="0"
                     max="30"
-                    className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white focus-glow transition-smooth hover:border-violet-500/50"
+                    className="w-full px-4 py-3.5 rounded-xl bg-gray-50 border border-gray-200 text-black placeholder-gray-400 focus:bg-white focus:border-black focus:ring-1 focus:ring-black outline-none transition-all"
                     value={formData.nightsCount || ''}
                     onChange={(e) => setFormData({ ...formData, nightsCount: parseInt(e.target.value) || 0 })}
                   />
@@ -275,7 +279,7 @@ export default function HomePage() {
               <button
                 type="submit"
                 disabled={isCreating}
-                className="w-full py-4 bg-gradient-to-r from-violet-600 to-pink-600 text-white font-semibold rounded-xl hover:from-violet-500 hover:to-pink-500 transition-smooth transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-violet-500/25"
+                className="w-full py-4 bg-black text-white font-semibold rounded-xl hover:bg-gray-900 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-gray-200"
               >
                 {isCreating ? (
                   <span className="flex items-center justify-center gap-2">
@@ -285,19 +289,30 @@ export default function HomePage() {
                     </svg>
                     Creating...
                   </span>
-                ) : '🚀 Create Trip'}
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    Create Trip
+                  </span>
+                )}
               </button>
             </form>
           </div>
 
           {/* Join Trip Card */}
-          <div className="glass-card rounded-3xl p-8 shadow-2xl flex flex-col animate-slide-up hover-lift" style={{ animationDelay: '0.2s' }}>
-            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-              <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-lg">🔗</span>
+          <div className="bg-white rounded-3xl p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 flex flex-col animate-slide-up hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all" style={{ animationDelay: '0.2s' }}>
+            <h2 className="text-2xl font-bold text-black mb-6 flex items-center gap-3">
+              <span className="w-10 h-10 rounded-lg bg-black text-white flex items-center justify-center text-lg">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+              </span>
               Join Existing Trip
             </h2>
 
-            <p className="text-slate-300 mb-8">
+            <p className="text-gray-500 mb-8">
               Have an invite code? Enter it below to join your friends' trip.
             </p>
 
@@ -305,7 +320,7 @@ export default function HomePage() {
               <div className="space-y-4">
                 <input
                   type="text"
-                  className="w-full px-6 py-5 rounded-2xl bg-white/5 border border-white/10 text-white text-center text-2xl tracking-[0.3em] uppercase placeholder-slate-600 focus-glow transition-smooth hover:border-cyan-500/50 font-mono"
+                  className="w-full px-6 py-5 rounded-2xl bg-gray-50 border border-gray-200 text-black text-center text-2xl tracking-[0.3em] uppercase placeholder-gray-300 focus:bg-white focus:border-black focus:ring-1 focus:ring-black outline-none transition-all font-mono"
                   placeholder="ABC12345"
                   maxLength={8}
                   value={joinCode}
@@ -315,38 +330,40 @@ export default function HomePage() {
                 <button
                   onClick={handleJoinTrip}
                   disabled={joinCode.length < 6}
-                  className="w-full py-4 bg-white/10 text-white font-semibold rounded-xl hover:bg-white/20 transition-smooth disabled:opacity-30 disabled:cursor-not-allowed border border-white/10 hover:border-cyan-500/50"
+                  className="w-full py-4 bg-gray-100 text-black font-semibold rounded-xl hover:bg-gray-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-transparent"
                 >
                   Join Trip →
                 </button>
               </div>
             </div>
 
-            <div className="mt-8 p-5 bg-gradient-to-br from-violet-500/10 to-cyan-500/10 rounded-2xl border border-white/5">
-              <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
-                <span className="gradient-text">✨</span> Features
+            <div className="mt-8 p-5 bg-gray-50 rounded-2xl border border-gray-100">
+              <h3 className="text-black font-semibold mb-3 flex items-center gap-2">
+                <svg className="w-5 h-5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                </svg>
+                Features
               </h3>
-              <ul className="text-slate-400 text-sm space-y-2">
+              <ul className="text-gray-600 text-sm space-y-2">
                 <li className="flex items-center gap-2">
-                  <span className="text-violet-400">•</span> AI-powered suggestions with @weai mentions
+                  <span className="text-black">•</span> AI-powered suggestions with @weai mentions
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-cyan-400">•</span> Real-time group chat & collaboration
+                  <span className="text-black">•</span> Real-time group chat & collaboration
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-pink-400">•</span> Democratic voting on activities
+                  <span className="text-black">•</span> Democratic voting on activities
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-emerald-400">•</span> Smart clash detection
+                  <span className="text-black">•</span> Smart clash detection
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-amber-400">•</span> Auto travel time calculations
+                  <span className="text-black">•</span> Auto travel time calculations
                 </li>
               </ul>
             </div>
           </div>
         </div>
       </div>
-    </main>
-  );
+    </main>);
 }

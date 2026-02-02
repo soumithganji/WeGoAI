@@ -92,7 +92,7 @@ export default function ChatInterface({
                 return (
                     <span
                         key={i}
-                        className="bg-blue-500/30 text-blue-100 px-1.5 py-0.5 rounded-md font-medium mx-0.5 inline-block"
+                        className="bg-gray-200 text-black px-1.5 py-0.5 rounded font-semibold mx-0.5 inline-block"
                     >
                         {part}
                     </span>
@@ -103,30 +103,36 @@ export default function ChatInterface({
     };
 
     return (
-        <div className="flex flex-col h-full bg-gradient-to-b from-slate-950 to-slate-900">
+        <div className="flex flex-col h-full bg-white">
             {/* Chat Header */}
-            <div className="px-5 py-4 bg-slate-900/80 backdrop-blur-xl border-b border-white/5">
-                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                    <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-sm">💬</span>
+            <div className="px-5 py-4 bg-white/90 backdrop-blur-xl border-b border-gray-100 z-10">
+                <h2 className="text-lg font-bold text-black flex items-center gap-2">
+                    <span className="w-8 h-8 rounded-lg bg-black text-white flex items-center justify-center shadow-md">
+                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                    </span>
                     Group Chat
                 </h2>
-                <p className="text-sm text-slate-500 mt-1">Type <span className="text-violet-400 font-medium">@weai</span> to ask for suggestions</p>
+                <p className="text-sm text-gray-500 mt-1">Type <span className="text-black font-semibold">@weai</span> to ask for suggestions</p>
             </div>
 
             {/* Messages */}
             <div
                 ref={messagesContainerRef}
                 onScroll={handleScroll}
-                className="flex-1 overflow-y-auto p-5 space-y-4"
+                className="flex-1 overflow-y-auto p-5 space-y-4 scroll-smooth"
             >
                 {messages.length === 0 && (
                     <div className="text-center py-16 animate-fade-in">
-                        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-violet-500/20 to-pink-500/20 flex items-center justify-center mx-auto mb-4">
-                            <span className="text-4xl">👋</span>
+                        <div className="w-20 h-20 rounded-full bg-gray-50 border border-gray-200 flex items-center justify-center mx-auto mb-4 text-gray-400">
+                            <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                            </svg>
                         </div>
-                        <p className="text-slate-300 font-medium">Start chatting with your group!</p>
-                        <p className="text-sm text-slate-500 mt-2">
-                            Tip: Type <span className="text-violet-400 font-medium">@weai</span> to get AI suggestions
+                        <p className="text-black font-semibold">Start chatting with your group!</p>
+                        <p className="text-sm text-gray-500 mt-2">
+                            Tip: Type <span className="text-black font-medium">@weai</span> to get AI suggestions
                         </p>
                     </div>
                 )}
@@ -145,25 +151,28 @@ export default function ChatInterface({
                             style={{ animationDelay: `${index * 0.05}s` }}
                         >
                             <div
-                                className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-lg ${msg.senderId === 'ai'
-                                    ? 'bg-gradient-to-br from-violet-600 to-pink-600 text-white shadow-violet-500/20'
+                                className={`max-w-[80%] rounded-2xl px-5 py-3.5 shadow-sm ${msg.senderId === 'ai'
+                                    ? 'bg-black text-white'
                                     : msg.senderId === userId
-                                        ? 'bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-indigo-500/20'
-                                        : 'bg-white/10 text-white shadow-black/20 border border-white/5'
+                                        ? 'bg-white text-black border border-gray-200'
+                                        : 'bg-gray-50 text-black border border-gray-200'
                                     }`}
                             >
                                 {msg.senderId !== userId && msg.senderId !== 'ai' && (
-                                    <p className="text-xs text-slate-300 mb-1.5 font-medium">{msg.senderName}</p>
+                                    <p className="text-xs text-gray-500 mb-1.5 font-semibold">{msg.senderName}</p>
                                 )}
                                 {msg.senderId === 'ai' && (
-                                    <p className="text-xs text-violet-200 mb-1.5 flex items-center gap-1.5 font-medium">
-                                        <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[10px]">🤖</span>
+                                    <p className="text-xs text-white mb-1.5 flex items-center gap-1.5 font-bold uppercase tracking-wider">
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                        </svg>
                                         AI Assistant
                                     </p>
                                 )}
                                 <p className="whitespace-pre-wrap leading-relaxed">{formatMessageContent(msg.content)}</p>
                                 {timeString && (
-                                    <p className="text-xs opacity-50 mt-2 text-right">
+                                    <p className={`text-[10px] mt-2 text-right ${msg.senderId === 'ai' ? 'text-white/60' : 'text-gray-400'
+                                        }`}>
                                         {timeString}
                                     </p>
                                 )}
@@ -174,11 +183,11 @@ export default function ChatInterface({
 
                 {isLoading && (
                     <div className="flex justify-start animate-fade-in">
-                        <div className="bg-white/10 rounded-2xl px-5 py-4 border border-white/5">
+                        <div className="bg-gray-50 rounded-2xl px-5 py-4 border border-gray-200">
                             <div className="flex items-center gap-1.5">
-                                <div className="w-2.5 h-2.5 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                                <div className="w-2.5 h-2.5 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                                <div className="w-2.5 h-2.5 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                                <div className="w-2 h-2 bg-black rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                                <div className="w-2 h-2 bg-black rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                                <div className="w-2 h-2 bg-black rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                             </div>
                         </div>
                     </div>
@@ -188,12 +197,12 @@ export default function ChatInterface({
             </div>
 
             {/* Input */}
-            <form onSubmit={handleSubmit} className="p-4 bg-slate-900/80 backdrop-blur-xl border-t border-white/5">
+            <form onSubmit={handleSubmit} className="p-4 bg-white border-t border-gray-100">
                 <div className="flex gap-3 items-end">
                     <button
                         type="button"
                         onClick={handleAIMention}
-                        className="px-4 py-2.5 bg-gradient-to-r from-violet-600 to-pink-600 text-white rounded-xl hover:from-violet-500 hover:to-pink-500 transition-smooth text-sm font-semibold shadow-lg shadow-violet-500/20"
+                        className="px-4 py-3 bg-gray-100 text-black rounded-xl hover:bg-gray-200 transition-all text-sm font-semibold border border-transparent"
                     >
                         @weai
                     </button>
@@ -204,13 +213,13 @@ export default function ChatInterface({
                         onKeyDown={handleKeyDown}
                         placeholder="Type a message..."
                         rows={1}
-                        className="flex-1 px-5 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-slate-500 focus-glow transition-smooth hover:border-violet-500/30 resize-none"
-                        style={{ minHeight: '44px', maxHeight: '120px' }}
+                        className="flex-1 px-5 py-3 bg-gray-50 border border-gray-200 rounded-xl text-black placeholder-gray-400 focus:bg-white focus:border-black focus:ring-1 focus:ring-black focus:outline-none transition-all resize-none"
+                        style={{ minHeight: '48px', maxHeight: '120px' }}
                     />
                     <button
                         type="submit"
                         disabled={!input.trim() || isLoading}
-                        className="px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl hover:from-indigo-500 hover:to-violet-500 transition-smooth disabled:opacity-30 disabled:cursor-not-allowed font-medium shadow-lg shadow-indigo-500/20"
+                        className="px-6 py-3 bg-black text-white rounded-xl hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-semibold shadow-lg shadow-gray-200"
                     >
                         Send
                     </button>
