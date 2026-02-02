@@ -255,10 +255,10 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
     query_lower = user_query.lower()
 
     # FAST PATH: Itinerary modifications (move, update, remove)
-    is_modification = any(word in query_lower for word in ["move", "change", "update", "shift", "reschedule", "delete", "remove", "cancel"])
+    is_modification = any(word in query_lower for word in ["move", "change", "update", "shift", "reschedule", "delete", "remove", "cancel", "clear", "empty", "reset"])
     
     # Check if this is a removal/deletion request
-    is_removal = any(word in query_lower for word in ["delete", "remove", "cancel"])
+    is_removal = any(word in query_lower for word in ["delete", "remove", "cancel", "clear", "empty", "reset"])
     
     if is_modification:
         if is_removal:
@@ -296,6 +296,8 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
                 2. Ensure "day" matches the item's day.
                 3. Output ONLY JSON, no other text.
                 4. If user says "remove breakfast for day 1", find "Breakfast" on day 1.
+                5. If user says "clear day X" or "empty day X" or "reset day X", include ALL items from day X in the removal list.
+                6. For "clear day X", list EVERY item that has day: X in the existing itinerary.
                 """,
                 agent=fast_modifier_agent,
                 expected_output="JSON block with action: remove_items."
@@ -478,23 +480,74 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
             base_url="https://integrate.api.nvidia.com/v1",
             max_tokens=4096  # Ensure enough tokens for full 7-day itinerary
         )
+
+        # Extract theme/adjectives from user query for emphasis
+        theme_words = []
+        theme_keywords = ["adventurous", "adventure", "romantic", "relaxing", "cultural", "foodie", 
+                         "budget", "luxury", "family", "kid-friendly", "party", "nightlife",
+                         "nature", "outdoor", "historical", "artistic", "spiritual", "wellness",
+                         "shopping", "beach", "mountain", "active", "lazy", "fun", "exciting",
+                         "peaceful", "quiet", "lively", "local", "authentic", "touristy", "offbeat"]
+        for word in theme_keywords:
+            if word in query_lower:
+                theme_words.append(word)
+        
+        # Set agent goal based on theme
+        if theme_words:
+            agent_goal = f"Create a {', '.join(theme_words).upper()} themed itinerary. EVERY activity must be {', '.join(theme_words)}!"
+        else:
+            agent_goal = "Create themed, personalized JSON itineraries that match the user's vision"
         
         fast_planner_agent = Agent(
-            role="Fast Trip Planner",
-            goal="Create valid JSON itineraries quickly",
-            backstory="You are an efficient travel planner who works instantly.",
+            role="Creative Trip Planner",
+            goal=agent_goal,
+            backstory="You are a creative travel planner who excels at crafting unique experiences. You pay close attention to adjectives and themes in requests to create perfectly tailored itineraries. When someone asks for an ADVENTUROUS trip, you include thrilling activities like scuba diving, hiking, zip-lining - NOT museums or generic sightseeing.",
             llm=planning_llm,
             verbose=True
         )
-
+        
+        theme_emphasis = ""
+        if theme_words:
+            theme_emphasis = f"""
+            
+            ⚠️⚠️⚠️ MANDATORY THEME REQUIREMENT ⚠️⚠️⚠️
+            
+            THE USER REQUESTED: **{', '.join(theme_words).upper()}**
+            
+            THIS IS NOT OPTIONAL. You MUST create a {', '.join(theme_words)} itinerary.
+            
+            THEME-SPECIFIC ACTIVITIES (use these):
+            - adventurous/adventure: Hiking, Trekking, Scuba Diving, Snorkeling, Zip-lining, Rock Climbing, Paragliding, Kayaking, ATV Rides, Bungee Jumping, Cave Exploration, White Water Rafting, Cliff Jumping, Jet Skiing, Surfing
+            - romantic: Couples Spa, Sunset Dinner, Scenic Walk, Wine Tasting, Private Tour, Rooftop Bar, Scenic Viewpoint, Boat Ride, Beach Picnic, Candlelit Dinner
+            - relaxing: Spa Treatment, Beach Lounging, Garden Walk, Cafe Visit, Pool Time, Meditation, Yoga Session, Scenic Drive
+            - cultural: Museum Visit, Temple Tour, Historical Site, Local Market, Traditional Show, Cooking Class, Art Gallery
+            - foodie: Food Tour, Street Food Walk, Cooking Class, Market Visit, Wine Tasting, Local Restaurant Hop
+            - nature/outdoor: National Park, Hiking Trail, Wildlife Safari, Waterfall Visit, Scenic Drive, Bird Watching
+            - nightlife/party: Club Hopping, Bar Crawl, Live Music, Rooftop Lounge, Pub Crawl, Beach Party
+            
+            ❌ DO NOT USE generic activities like "Visit Museum", "City Tour", "Sightseeing" for an ADVENTUROUS request!
+            ✅ USE activities like "Scuba Diving", "Jungle Trekking", "Cliff Jumping", "Paragliding" for ADVENTUROUS!
+            
+            """
+        else:
+            # Even without explicit theme, remind to be creative
+            theme_emphasis = """
+            
+            Create an interesting, engaging itinerary with varied activities.
+            """
+        
         general_task = Task(
-            description=f"""Create a COMPLETE FULL-DAY itinerary for: {user_query}
+            description=f"""USER REQUEST: {user_query}
             
             Trip settings: {context_str}
+            {theme_emphasis}
+            
+            IMPORTANT: READ THE USER REQUEST ABOVE. If they said "adventurous", "romantic", "relaxing", etc., 
+            you MUST create activities that match that theme. Do NOT ignore adjectives!
             
             RULES:
             1. For meals, use GENERIC titles: "Breakfast", "Lunch", "Dinner" - no restaurant names.
-            2. For attractions, use well-known landmarks (e.g., "Visit Eiffel Tower").
+            2. For attractions, choose activities that MATCH THE USER'S REQUESTED THEME/STYLE.
             3. Keep descriptions to MAX 5 words each (very brief).
             4. IMPORTANT: Include 5-6 activities per day covering MORNING, AFTERNOON, and EVENING.
             5. EVERY day MUST have: Breakfast, morning activity, Lunch, afternoon activity, Dinner, and optionally an evening activity.
@@ -503,24 +556,28 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
             8. Set "replacementStrategy" to "replace" (default for new plans).
             9. CRITICAL: Use "duration" (in minutes). Time fields (startTime/endTime) are OPTIONAL.
             
-            OUTPUT ONLY THIS JSON FORMAT (no other text):
+            IF USER ASKED FOR "ADVENTUROUS" - USE THESE ACTIVITIES:
+            Morning: Scuba Diving, Hiking Trek, Paragliding, Rock Climbing, Zip-lining, Kayaking
+            Afternoon: White Water Rafting, Cliff Jumping, ATV Ride, Jungle Safari, Snorkeling, Surfing
+            Evening: Night Safari, Camping, Bonfire, Stargazing, Night Dive
             
+            ❌ WRONG for adventurous: "Visit Museum", "City Tour", "Shopping", "Spa"
+            ✅ CORRECT for adventurous: "Scuba Diving", "Jungle Trekking", "Paragliding", "Rafting"
+            
+            OUTPUT FORMAT:
             ```json
             {{
                 "action": "add_items",
                 "replacementStrategy": "replace",
                 "items": [
-                    {{"title": "Breakfast", "description": "Morning meal", "day": 1, "duration": 60, "location": "Hotel area"}},
-                    {{"title": "Visit Eiffel Tower", "description": "Iconic landmark views", "day": 1, "duration": 150, "location": "Eiffel Tower"}},
-                    {{"title": "Lunch", "description": "Midday meal", "day": 1, "duration": 90, "location": "Central area"}},
-                    {{"title": "Louvre Museum", "description": "Art masterpieces", "day": 1, "duration": 180, "location": "Louvre Museum"}},
-                    {{"title": "Dinner", "description": "Evening meal", "day": 1, "duration": 90, "location": "Central area"}},
-                    {{"title": "Seine River Cruise", "description": "Night city views", "day": 1, "duration": 90, "location": "Seine River"}}
+                    {{"title": "Breakfast", "description": "Fuel up", "day": 1, "duration": 60, "location": "Hotel"}},
+                    {{"title": "[THEMED ACTIVITY]", "description": "Brief desc", "day": 1, "duration": 180, "location": "Location"}},
+                    ...
                 ]
             }}
             ```""",
             agent=fast_planner_agent,
-            expected_output="ONLY a JSON block with action: add_items. No other text."
+            expected_output="ONLY a JSON block with action: add_items containing THEMED activities. No generic sightseeing!"
         )
         
         fast_crew = Crew(

@@ -62,6 +62,42 @@ export async function POST(request: NextRequest) {
                 .sort({ createdAt: -1 })
                 .limit(20);
 
+            // --- SPECIAL HANDLER: "clear day X" commands ---
+            // Handle these directly without AI to avoid misinterpretation
+            const clearDayMatch = content.toLowerCase().match(/\b(clear|empty|reset)\s+(day\s*)?(\d+)/i);
+            if (clearDayMatch && trip) {
+                const dayToClear = parseInt(clearDayMatch[3], 10);
+                const initialLength = trip.itinerary.length;
+                
+                // Remove all items for the specified day
+                trip.itinerary = trip.itinerary.filter((item: any) => item.day !== dayToClear);
+                const removedCount = initialLength - trip.itinerary.length;
+                
+                if (removedCount > 0) {
+                    await trip.save();
+                    
+                    const aiMessage = new Message({
+                        tripId,
+                        senderId: 'ai',
+                        senderName: 'AI Assistant',
+                        content: `Done! I've cleared day ${dayToClear} - removed ${removedCount} item${removedCount > 1 ? 's' : ''} from the itinerary.`,
+                        isAIMention: false,
+                    });
+                    await aiMessage.save();
+                    return NextResponse.json({ message, aiResponse: aiMessage });
+                } else {
+                    const aiMessage = new Message({
+                        tripId,
+                        senderId: 'ai',
+                        senderName: 'AI Assistant',
+                        content: `Day ${dayToClear} is already empty - there are no items to clear.`,
+                        isAIMention: false,
+                    });
+                    await aiMessage.save();
+                    return NextResponse.json({ message, aiResponse: aiMessage });
+                }
+            }
+
             // Call AI endpoint
             try {
                 // In development, call the local Python server directly to avoid Next.js proxy timeouts
@@ -395,6 +431,142 @@ export async function POST(request: NextRequest) {
                             // If this was an implicit update (no text), notify user
                             if (!messageContent.trim()) {
                                 messageContent = "I've noted your preferences for the trip!";
+                            }
+
+                            // --- ACTION: SMART SCHEDULE ---
+                        } else if (actionData.action === 'smart_schedule' && Array.isArray(actionData.newItems)) {
+                            const tripDoc = await Trip.findById(tripId);
+                            if (!tripDoc) throw new Error('Trip not found');
+
+                            const isOptions = actionData.isOptions === true;
+                            const itemsToRemove = actionData.itemsToRemove || [];
+                            const targetDay = actionData.newItems[0]?.day || 1;
+
+                            // Helper to validate HH:MM format
+                            const isValidTime = (time: string) => {
+                                if (!time || typeof time !== 'string') return false;
+                                const match = time.match(/^(\d{1,2}):(\d{2})$/);
+                                if (!match) return false;
+                                const h = parseInt(match[1], 10);
+                                const m = parseInt(match[2], 10);
+                                return h >= 0 && h <= 23 && m >= 0 && m <= 59;
+                            };
+
+                            // Helper to convert HH:MM to minutes
+                            const toMinutes = (time: string) => {
+                                if (!isValidTime(time)) return 0;
+                                const [h, m] = time.split(':').map(Number);
+                                return h * 60 + m;
+                            };
+
+                            // Helper to convert minutes to HH:MM
+                            const toTimeStr = (mins: number) => {
+                                const h = Math.floor(mins / 60) % 24;
+                                const m = mins % 60;
+                                return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                            };
+
+                            // Step 1: Remove specified items (only from the target day, matching by title)
+                            let removedCount = 0;
+                            if (itemsToRemove.length > 0) {
+                                const initialLength = tripDoc.itinerary.length;
+                                tripDoc.itinerary = tripDoc.itinerary.filter((item: any) => {
+                                    // Only consider items on the same day
+                                    if (item.day !== targetDay) return true;
+                                    
+                                    // Check if this item's title matches any in itemsToRemove
+                                    for (const titleToRemove of itemsToRemove) {
+                                        const titleMatch = item.title.toLowerCase().includes(titleToRemove.toLowerCase()) ||
+                                            titleToRemove.toLowerCase().includes(item.title.toLowerCase());
+                                        if (titleMatch) {
+                                            console.log(`smart_schedule: Removing "${item.title}" from day ${item.day}`);
+                                            return false;
+                                        }
+                                    }
+                                    return true;
+                                });
+                                removedCount = initialLength - tripDoc.itinerary.length;
+                            }
+
+                            // Step 2: Add new items
+                            const newItems: any[] = [];
+
+                            if (isOptions) {
+                                // Mutually exclusive options - same time slot with groupId
+                                const groupId = uuidv4();
+                                const day = targetDay;
+
+                                // Use first item's time/duration if available
+                                let startTime = actionData.newItems[0]?.startTime || '09:00';
+                                let duration = actionData.newItems[0]?.duration || 60;
+
+                                if (!isValidTime(startTime)) startTime = '09:00';
+
+                                const startMins = toMinutes(startTime);
+                                const endMins = startMins + duration;
+                                const endTime = toTimeStr(endMins);
+
+                                newItems.push(...actionData.newItems.map((item: any) => ({
+                                    id: uuidv4(),
+                                    title: item.title,
+                                    description: item.description || '',
+                                    day: day,
+                                    startTime: isValidTime(item.startTime) ? item.startTime : startTime,
+                                    endTime: isValidTime(item.endTime) ? item.endTime : endTime,
+                                    duration: item.duration || duration,
+                                    location: item.location || '',
+                                    groupId,
+                                    votes: { yes: [], no: [] },
+                                    status: 'pending',
+                                    suggestedBy: 'ai',
+                                    createdAt: new Date()
+                                })));
+                            } else {
+                                // Sequential items
+                                let currentMins = 9 * 60; // Default start
+
+                                actionData.newItems.forEach((item: any, index: number) => {
+                                    const duration = item.duration || 60;
+                                    let sMins = currentMins;
+
+                                    if (isValidTime(item.startTime)) {
+                                        sMins = toMinutes(item.startTime);
+                                    }
+
+                                    const eMins = sMins + duration;
+
+                                    newItems.push({
+                                        id: uuidv4(),
+                                        title: item.title,
+                                        description: item.description || '',
+                                        day: item.day || targetDay,
+                                        startTime: toTimeStr(sMins),
+                                        endTime: toTimeStr(eMins),
+                                        duration,
+                                        order: index,
+                                        location: item.location || '',
+                                        votes: { yes: [], no: [] },
+                                        status: 'pending',
+                                        suggestedBy: 'ai',
+                                        createdAt: new Date()
+                                    });
+
+                                    currentMins = eMins + 30;
+                                });
+                            }
+
+                            tripDoc.itinerary.push(...newItems);
+                            await tripDoc.save();
+
+                            console.log(`smart_schedule: Removed ${removedCount} items, added ${newItems.length} new items for day ${targetDay}`);
+                            hasProcessedAction = true;
+
+                            if (!messageContent) {
+                                if (isOptions) {
+                                    messageContent = `I've added ${newItems.length} options for you to vote on. Check the Itinerary panel!`;
+                                } else {
+                                    messageContent = `I've updated the schedule with ${newItems.length} new item${newItems.length > 1 ? 's' : ''}.`;
+                                }
                             }
                         }
                     } catch (e) {

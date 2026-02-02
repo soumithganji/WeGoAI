@@ -138,7 +138,7 @@ export default function ChatInterface({
                 )}
 
                 {messages.map((msg, index) => {
-                    const messageId = (msg as any)._id || msg.id || index;
+                    const messageId = (msg as any)._id || msg.id || `msg-${index}`;
                     const createdAt = msg.createdAt ? new Date(msg.createdAt) : new Date();
                     const timeString = !isNaN(createdAt.getTime())
                         ? createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -146,9 +146,8 @@ export default function ChatInterface({
 
                     return (
                         <div
-                            key={index}
-                            className={`flex ${msg.senderId === userId ? 'justify-end' : 'justify-start'} animate-slide-up`}
-                            style={{ animationDelay: `${index * 0.05}s` }}
+                            key={messageId}
+                            className={`flex ${msg.senderId === userId ? 'justify-end' : 'justify-start'}`}
                         >
                             <div
                                 className={`max-w-[80%] rounded-2xl px-5 py-3.5 shadow-sm ${msg.senderId === 'ai'

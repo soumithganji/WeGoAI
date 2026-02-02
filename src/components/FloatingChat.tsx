@@ -21,8 +21,8 @@ export default function FloatingChat({
 }: FloatingChatProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
-    // Initialize from localStorage if available, otherwise 0
-    const [lastSeenCount, setLastSeenCount] = useState(0);
+    const [lastSeenCount, setLastSeenCount] = useState<number | null>(null); // null = not loaded yet
+    const [isInitialized, setIsInitialized] = useState(false);
 
     // KEY for localStorage
     const STORAGE_KEY = `weai_chat_last_seen_${tripId}`;
@@ -32,15 +32,22 @@ export default function FloatingChat({
         const savedCount = localStorage.getItem(STORAGE_KEY);
         if (savedCount) {
             setLastSeenCount(parseInt(savedCount, 10));
+        } else {
+            // First time: assume all current messages are "seen"
+            setLastSeenCount(messages.length);
+            localStorage.setItem(STORAGE_KEY, messages.length.toString());
         }
+        setIsInitialized(true);
     }, [tripId]);
 
-    // Track unread messages when chat is closed
+    // Track unread messages when chat is closed (only after initialized)
     useEffect(() => {
+        if (!isInitialized || lastSeenCount === null) return;
+        
         if (!isOpen && messages.length > lastSeenCount) {
             setUnreadCount(messages.length - lastSeenCount);
         }
-    }, [messages.length, isOpen, lastSeenCount]);
+    }, [messages.length, isOpen, lastSeenCount, isInitialized]);
 
     // Reset unread count when opening chat
     const handleOpen = () => {
