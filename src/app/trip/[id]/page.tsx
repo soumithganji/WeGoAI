@@ -341,8 +341,7 @@ export default function TripPage({ params }: TripPageProps) {
     };
 
     const copyInviteLink = () => {
-        const link = `${window.location.origin}/trip/${tripId}/join?code=${trip?.inviteCode}`;
-        navigator.clipboard.writeText(link);
+        navigator.clipboard.writeText(trip?.inviteCode || '');
         setShowCopied(true);
         setTimeout(() => setShowCopied(false), 2000);
     };

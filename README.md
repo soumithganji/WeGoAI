@@ -17,14 +17,8 @@ WeGoAI is a modern web application that helps groups plan trips together using A
 ### Group Collaboration
 - **Real-Time Group Chat** – Collaborate with your travel companions in real-time
 - **Democratic Voting** – Vote on activities and destinations as a group
-- **Invite System** – Share 8-character invite codes to add friends to your trip
+- **Invite System** – Share an invite code to add friends to your trip
 - **User Preferences** – Track individual preferences to make balanced recommendations
-
-### Itinerary Management
-- **Day-by-Day Planning** – Organize activities into structured daily schedules
-- **Smart Clash Detection** – Automatic detection of scheduling conflicts
-- **Drag-and-Drop Interface** – Easy reordering of activities
-- **Auto Travel Time** – Automatically calculates travel time between activities
 
 ### Location Services
 - **Destination Autocomplete** – Smart city search with coordinates
