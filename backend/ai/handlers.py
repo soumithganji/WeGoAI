@@ -1,5 +1,5 @@
 """
-Vercel Python Serverless Function for AI Suggestions
+HTTP Request Handlers for AI Suggestions
 Endpoint: POST /api/ai/suggest
 """
 from http.server import BaseHTTPRequestHandler
@@ -7,10 +7,10 @@ import json
 import os
 import sys
 
-# Add the api/ai directory to the path for local imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add the backend directory to the path for local imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from crew import create_suggestion_crew, plan_itinerary
+from ai.crew import create_suggestion_crew, plan_itinerary
 
 
 class handler(BaseHTTPRequestHandler):

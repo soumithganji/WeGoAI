@@ -1,12 +1,24 @@
+#!/usr/bin/env python3
+"""
+WeGoAI Backend Server
+Runs the AI suggestion service for local development and production.
+
+Usage:
+    python backend/server.py           # Run on default port 5328
+    PORT=8000 python backend/server.py # Run on custom port
+"""
 import http.server
 import os
 import sys
 
-# Add project root to sys.path so we can import from api.ai
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Add backend directory to path
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, BACKEND_DIR)
 
-# Load .env file manually
-env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+# Load .env file from project root
+PROJECT_ROOT = os.path.dirname(BACKEND_DIR)
+env_path = os.path.join(PROJECT_ROOT, '.env')
+
 if os.path.exists(env_path):
     print(f"Loading environment from {env_path}")
     with open(env_path, 'r') as f:
@@ -21,19 +33,20 @@ if os.path.exists(env_path):
 else:
     print("Warning: .env file not found")
 
+# Import handler after environment is loaded
 try:
-    from api.ai.suggest import handler
+    from ai.handlers import handler
 except ImportError as e:
-    print(f"Error importing api.ai.suggest: {e}")
-    print("Make sure you are running this script from the project root or scripts folder.")
+    print(f"Error importing ai.handlers: {e}")
+    print("Make sure you are running this script from the project root.")
     sys.exit(1)
 
+
 class DevHandler(handler):
+    """Development handler with request logging."""
+    
     def do_POST(self):
         print(f"[AI Server] POST {self.path}")
-        # Next.js might rewrite /api/ai/suggest?tripId=... 
-        # The handler in suggest.py reads body.
-        
         if self.path.startswith('/api/ai/suggest'):
             try:
                 super().do_POST()
@@ -45,22 +58,30 @@ class DevHandler(handler):
 
     def do_OPTIONS(self):
         print(f"[AI Server] OPTIONS {self.path}")
-        # Only allow our endpoint
         if self.path.startswith('/api/ai/suggest'):
-             super().do_OPTIONS()
+            super().do_OPTIONS()
         else:
-             self.send_error(404)
-        
-if __name__ == "__main__":
-    PORT = 5328
-    server_address = ('127.0.0.1', PORT)
-    print(f"Starting AI Development Server at http://127.0.0.1:{PORT}")
-    print("Use this for local development with 'npm run dev'")
-    print("Press Ctrl+C to stop")
+            self.send_error(404)
+
+
+def main():
+    PORT = int(os.environ.get('PORT', 5328))
+    HOST = os.environ.get('HOST', '127.0.0.1')
+    
+    server_address = (HOST, PORT)
+    print(f"\n🤖 WeGoAI Backend Server")
+    print(f"   Running at http://{HOST}:{PORT}")
+    print(f"   Endpoint: POST /api/ai/suggest")
+    print(f"\n   Press Ctrl+C to stop\n")
     
     httpd = http.server.HTTPServer(server_address, DevHandler)
+    
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
-        print("\nStopping server...")
+        print("\n\nStopping server...")
         httpd.server_close()
+
+
+if __name__ == "__main__":
+    main()

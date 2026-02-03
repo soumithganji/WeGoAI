@@ -1,8 +1,5 @@
 {
-  "functions": {
-    "api/ai/*.py": {
-      "runtime": "@vercel/python@3.0.0",
-      "maxDuration": 60
-    }
+  "env": {
+    "AI_BACKEND_URL": "@ai-backend-url"
   }
 }
