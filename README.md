@@ -141,12 +141,12 @@ WeGoAI/
 │   │   └── globals.css           # Global styles
 │   ├── components/
 │   │   ├── ChatInterface.tsx     # Real-time chat component
-│   │   ├── ItineraryPanel.tsx    # Itinerary display/edit
 │   │   ├── DayEditor.tsx         # Day activity editor
 │   │   ├── DaySections.tsx       # Day sections component
 │   │   └── FloatingChat.tsx      # Floating chat overlay
 │   └── lib/
-│       └── mongodb.ts            # MongoDB connection
+│       └── db/
+│           └── connection.ts     # MongoDB connection
 ├── backend/
 │   ├── server.py                 # AI backend HTTP server
 │   ├── requirements.txt          # Python dependencies

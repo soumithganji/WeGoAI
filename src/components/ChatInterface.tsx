@@ -1,20 +1,16 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Trip, Message, ItineraryItem } from '@/lib/types';
+import { Message } from '@/lib/types';
 
 interface ChatInterfaceProps {
-    tripId: string;
     userId: string;
-    userName: string;
     messages: Message[];
     onSendMessage: (content: string) => void;
 }
 
 export default function ChatInterface({
-    tripId,
     userId,
-    userName,
     messages,
     onSendMessage
 }: ChatInterfaceProps) {

@@ -19,7 +19,6 @@ export default function TripPage({ params }: TripPageProps) {
     const [userId, setUserId] = useState<string>('');
     const [userName, setUserName] = useState<string>('');
     const [loading, setLoading] = useState(true);
-    const [showItinerary, setShowItinerary] = useState(true);
     const [showSettings, setShowSettings] = useState(false);
     const [showCopied, setShowCopied] = useState(false);
 

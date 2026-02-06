@@ -108,9 +108,7 @@ export default function FloatingChat({
 
                 {/* Chat Content */}
                 <ChatInterface
-                    tripId={tripId}
                     userId={userId}
-                    userName={userName}
                     messages={messages}
                     onSendMessage={onSendMessage}
                 />
