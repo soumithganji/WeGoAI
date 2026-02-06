@@ -540,11 +540,38 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
             4. Do NOT assume the user wants extreme adventure or niche activities unless specified.
             """
         
+        # Extract target day if specified (e.g., "day 3", "day three")
+        import re
+        target_day = None
+        day_match = re.search(r'day\s*(\d+)', query_lower)
+        if day_match:
+            target_day = int(day_match.group(1))
+        
+        # Modify instructions if a specific day is targeted
+        day_instruction = ""
+        output_limit_instruction = ""
+        
+        if target_day:
+            day_instruction = f"""
+            
+            ⚠️⚠️⚠️ SINGLE DAY PLANNING ⚠️⚠️⚠️
+            User specifically requested to plan for **DAY {target_day}**.
+            
+            YOU MUST:
+            1. ONLY generate activities for Day {target_day}.
+            2. Do NOT generate items for other days.
+            3. Ensure the "day" field in JSON is exactly {target_day} for all items.
+            """
+            output_limit_instruction = f"ONLY items for Day {target_day}"
+        else:
+            output_limit_instruction = "ALL items for ALL days"
+
         general_task = Task(
             description=f"""USER REQUEST: {user_query}
             
             Trip settings: {context_str}
             {theme_emphasis}
+            {day_instruction}
             
             IMPORTANT: READ THE USER REQUEST ABOVE. If they said "adventurous", "romantic", "relaxing", etc., 
             you MUST create activities that match that theme. Do NOT ignore adjectives!
@@ -555,7 +582,7 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
             3. Keep descriptions to MAX 5 words each (very brief).
             4. IMPORTANT: Include 5-6 activities per day covering MORNING, AFTERNOON, and EVENING.
             5. EVERY day MUST have: Breakfast, morning activity, Lunch, afternoon activity, Dinner, and optionally an evening activity.
-            6. OUTPUT A SINGLE JSON OBJECT containing ALL items for ALL days in one 'items' array.
+            6. OUTPUT A SINGLE JSON OBJECT containing {output_limit_instruction} in one 'items' array.
             7. Do NOT output multiple JSON blocks.
             8. Set "replacementStrategy" to "replace" (default for new plans).
             9. CRITICAL: Use "duration" (in minutes). Time fields (startTime/endTime) are OPTIONAL.
@@ -574,8 +601,8 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
                 "action": "add_items",
                 "replacementStrategy": "replace",
                 "items": [
-                    {{"title": "Breakfast", "description": "Fuel up", "day": 1, "duration": 60, "location": "Hotel"}},
-                    {{"title": "[THEMED ACTIVITY]", "description": "Brief desc", "day": 1, "duration": 180, "location": "Location"}},
+                    {{"title": "Breakfast", "description": "Fuel up", "day": {target_day if target_day else 1}, "duration": 60, "location": "Hotel"}},
+                    {{"title": "[THEMED ACTIVITY]", "description": "Brief desc", "day": {target_day if target_day else 1}, "duration": 180, "location": "Location"}},
                     ...
                 ]
             }}
