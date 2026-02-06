@@ -501,7 +501,7 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
         fast_planner_agent = Agent(
             role="Creative Trip Planner",
             goal=agent_goal,
-            backstory="You are a creative travel planner who excels at crafting unique experiences. You pay close attention to adjectives and themes in requests to create perfectly tailored itineraries. When someone asks for an ADVENTUROUS trip, you include thrilling activities like scuba diving, hiking, zip-lining - NOT museums or generic sightseeing.",
+            backstory="You are an expert travel planner focused on creating the perfect introduction to a destination. For most travelers, you prioritize 'must-see' iconic landmarks, local culture, and top-rated experiences that define the place. However, if a specific theme is requested (like 'adventurous' or 'romantic'), you completely pivot to match that style.",
             llm=planning_llm,
             verbose=True
         )
@@ -530,10 +530,14 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
             
             """
         else:
-            # Even without explicit theme, remind to be creative
+            # Default to "Classic Tourist" mode
             theme_emphasis = """
             
-            Create an interesting, engaging itinerary with varied activities.
+            DEFAULT STRATEGY (No specific theme requested):
+            1. Focus on the CLASSIC "Must-See" Highlights of the destination.
+            2. Include the most famous landmarks, popular cultural spots, and highly-rated local experiences.
+            3. Create a balanced itinerary suitable for a first-time visitor.
+            4. Do NOT assume the user wants extreme adventure or niche activities unless specified.
             """
         
         general_task = Task(
