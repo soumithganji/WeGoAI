@@ -12,7 +12,6 @@ WeGoAI is a modern web application that helps groups plan trips together using A
 - **Smart Recommendations** – Mention `@weai` in the chat to get personalized trip suggestions
 - **CrewAI Agents** – Multi-agent system with Planner, Search, and Preference agents
 - **Real-Time Search** – Integrated Google Serper API for up-to-date travel information
-- **Travel Time Calculator** – OpenRouteService integration for accurate travel duration estimates
 
 ### Group Collaboration
 - **Real-Time Group Chat** – Collaborate with your travel companions in real-time
@@ -23,7 +22,6 @@ WeGoAI is a modern web application that helps groups plan trips together using A
 ### Location Services
 - **Destination Autocomplete** – Smart city search with coordinates
 - **Places API** – Search for cities, hotels, and airports
-- **OpenRouteService Integration** – Travel time calculations between locations
 
 ---
 
@@ -77,9 +75,6 @@ NVIDIA_NIM_API_KEY=your_nvidia_nim_api_key
 
 # Google Serper (for web search)
 SERPER_API_KEY=your_serper_api_key
-
-# OpenRouteService (for travel times)
-ORS_API_KEY=your_openrouteservice_api_key
 ```
 
 ### Installation
@@ -184,7 +179,6 @@ WeGoAI/
 | API | Purpose |
 |-----|---------|
 | **Google Serper** | Web search for travel info |
-| **OpenRouteService** | Travel time calculations |
 | **Nominatim** | Location autocomplete |
 
 ---

@@ -6,7 +6,7 @@ import os
 from crewai import Agent, Crew, Task, Process
 from langchain_community.utilities import GoogleSerperAPIWrapper
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
-import requests
+
 
 # Initialize NVIDIA NIM LLM (70B for complex planning)
 llm = ChatNVIDIA(
@@ -36,50 +36,7 @@ def fast_search_tool(query: str):
     serper = GoogleSerperAPIWrapper(serper_api_key=api_key)
     return serper.run(query)
 
-# Tool 2: Travel time calculator (OpenRouteService)
-def get_travel_time(origin: str, destination: str) -> str:
-    """Calculate travel time between two locations using OpenRouteService."""
-    try:
-        api_key = os.environ.get("ORS_API_KEY")
-        if not api_key:
-            return "Travel time unavailable (no API key)"
-        
-        # First geocode the locations
-        geocode_url = "https://api.openrouteservice.org/geocode/search"
-        
-        # Get origin coords
-        origin_resp = requests.get(geocode_url, params={
-            "api_key": api_key,
-            "text": origin,
-            "size": 1
-        })
-        origin_coords = origin_resp.json()["features"][0]["geometry"]["coordinates"]
-        
-        # Get destination coords
-        dest_resp = requests.get(geocode_url, params={
-            "api_key": api_key,
-            "text": destination,
-            "size": 1
-        })
-        dest_coords = dest_resp.json()["features"][0]["geometry"]["coordinates"]
-        
-        # Get route
-        route_url = "https://api.openrouteservice.org/v2/directions/driving-car"
-        route_resp = requests.get(route_url, params={
-            "api_key": api_key,
-            "start": f"{origin_coords[0]},{origin_coords[1]}",
-            "end": f"{dest_coords[0]},{dest_coords[1]}"
-        })
-        
-        duration_seconds = route_resp.json()["features"][0]["properties"]["segments"][0]["duration"]
-        duration_minutes = int(duration_seconds / 60)
-        
-        return f"Travel time from {origin} to {destination}: approximately {duration_minutes} minutes by car"
-    except Exception as e:
-        return f"Could not calculate travel time: {str(e)}"
-
-
-# Agent 1: Search Agent (has web search + travel time tools)
+# Agent 1: Search Agent (has web search tools)
 search_agent = Agent(
     role="Travel Researcher",
     goal="Find the best travel options, restaurants, attractions, and activities. Calculate travel times between places.",
@@ -98,7 +55,6 @@ preference_agent = Agent(
     verbose=True
 )
 
-# Agent 3: Planner Agent (TOP - orchestrates the other two)
 # Agent 3: Planner Agent (TOP - orchestrates the other two)
 planner_agent = Agent(
     role="Trip Itinerary Planner",
@@ -137,7 +93,6 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
     
     log_to_file("USER QUERY", user_query)
     
-    # Format context for agents
     # Format context for agents
     settings = trip_context.get("settings", {})
     preferences = trip_context.get("preferences", {})
@@ -355,7 +310,6 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
         return str(result)
 
     # FAST PATH: Targeted Suggestions (Search + Format in one step)
-    # optimizing latency by using single agent instead of 3
     # Also captures "add X" requests which should go through smart scheduling
     is_suggestion_request = any(w in query_lower for w in ["suggest", "recommend", "options", "places", "spots", "ideas", "add", "include", "want", "need"])
     
@@ -685,52 +639,6 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
         agents=[search_agent, preference_agent, planner_agent],
         tasks=[search_task, preference_task, planning_task],
         process=Process.sequential,
-        verbose=True
-    )
-    
-    result = crew.kickoff()
-    return str(result)
-
-
-def plan_itinerary(trip_context: dict, chat_history: list, scope: str = "everything") -> str:
-    """Generate a full or partial itinerary plan."""
-    
-    settings = trip_context.get("settings", {})
-    
-    context_str = f"""
-    Destination: {settings.get('destination')}
-    Duration: {settings.get('daysCount')} days
-    Group Size: {settings.get('groupSize')}
-    Age Group: {settings.get('ageGroup')}
-    Landing: {settings.get('landingTime', 'Morning')}
-    Departure: {settings.get('departureTime', 'Evening')}
-    """
-    
-    chat_str = "\n".join([f"{m.get('senderName')}: {m.get('content')}" for m in chat_history[-30:]])
-    
-    planning_task = Task(
-        description=f"""Create a complete trip plan for: {scope}
-        
-        Trip context: {context_str}
-        
-        Group preferences from chat:
-        {chat_str}
-        
-        Create a detailed itinerary with:
-        - Specific activities for each time slot
-        - Restaurant recommendations for meals
-        - Travel time estimates between locations
-        - Buffer time for rest
-        - Mix of activities based on group preferences""",
-        agent=planner_agent,
-        expected_output="A detailed day-by-day itinerary with times, activities, locations, and travel time estimates."
-    )
-    
-    crew = Crew(
-        agents=[search_agent, preference_agent, planner_agent],
-        tasks=[planning_task],
-        process=Process.hierarchical,
-        manager_agent=planner_agent,
         verbose=True
     )
     

@@ -1,5 +1,5 @@
 # AI module for WeGoAI backend
-from .crew import create_suggestion_crew, plan_itinerary
+from .crew import create_suggestion_crew
 from .handlers import handler
 
-__all__ = ['create_suggestion_crew', 'plan_itinerary', 'handler']
+__all__ = ['create_suggestion_crew', 'handler']

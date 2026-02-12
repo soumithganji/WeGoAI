@@ -10,7 +10,7 @@ import sys
 # Add the backend directory to the path for local imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ai.crew import create_suggestion_crew, plan_itinerary
+from ai.crew import create_suggestion_crew
 
 
 class handler(BaseHTTPRequestHandler):
@@ -23,14 +23,10 @@ class handler(BaseHTTPRequestHandler):
             query = body.get('query', '')
             trip_context = body.get('tripContext', {})
             chat_history = body.get('chatHistory', [])
-            action = body.get('action', 'suggest')  # 'suggest' or 'plan'
-            scope = body.get('scope', 'everything')  # for planning: 'everything', 'day 2', etc.
+            action = body.get('action', 'suggest')
+            scope = body.get('scope', 'everything')  
             
-            # Run appropriate crew action
-            if action == 'plan':
-                result = plan_itinerary(trip_context, chat_history, scope)
-            else:
-                result = create_suggestion_crew(query, trip_context, chat_history)
+            result = create_suggestion_crew(query, trip_context, chat_history)
             
             # Send response
             self.send_response(200)

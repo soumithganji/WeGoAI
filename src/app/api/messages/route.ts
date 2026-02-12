@@ -68,14 +68,14 @@ export async function POST(request: NextRequest) {
             if (clearDayMatch && trip) {
                 const dayToClear = parseInt(clearDayMatch[3], 10);
                 const initialLength = trip.itinerary.length;
-                
+
                 // Remove all items for the specified day
                 trip.itinerary = trip.itinerary.filter((item: any) => item.day !== dayToClear);
                 const removedCount = initialLength - trip.itinerary.length;
-                
+
                 if (removedCount > 0) {
                     await trip.save();
-                    
+
                     const aiMessage = new Message({
                         tripId,
                         senderId: 'ai',
@@ -100,7 +100,6 @@ export async function POST(request: NextRequest) {
 
             // Call AI endpoint
             try {
-                // In development, call the local Python server directly to avoid Next.js proxy timeouts
                 const aiUrl = process.env.NODE_ENV === 'development'
                     ? 'http://127.0.0.1:5328/api/ai/suggest'
                     : `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/ai/suggest`;
@@ -473,7 +472,7 @@ export async function POST(request: NextRequest) {
                                 tripDoc.itinerary = tripDoc.itinerary.filter((item: any) => {
                                     // Only consider items on the same day
                                     if (item.day !== targetDay) return true;
-                                    
+
                                     // Check if this item's title matches any in itemsToRemove
                                     for (const titleToRemove of itemsToRemove) {
                                         const titleMatch = item.title.toLowerCase().includes(titleToRemove.toLowerCase()) ||
