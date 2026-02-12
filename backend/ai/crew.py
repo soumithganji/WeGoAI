@@ -3,7 +3,10 @@ CrewAI Trip Planner Agents
 3 Agents: Planner (manager), Search, Preference
 """
 import os
+import json
+import re as _re
 from crewai import Agent, Crew, Task, Process
+from crewai.tasks.task_output import TaskOutput
 from langchain_community.utilities import GoogleSerperAPIWrapper
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
 
@@ -81,6 +84,83 @@ def log_debug(message: str):
             f.write(f"\n[{pd.Timestamp.now()}] {message}\n")
     except:
         pass
+
+
+# ═══════════════════════════════════════════════════════════════
+# GUARDRAIL FUNCTIONS
+# ═══════════════════════════════════════════════════════════════
+
+def _extract_json(raw: str) -> dict | None:
+    """Helper: extract first JSON object from raw agent output."""
+    match = _re.search(r'\{.*\}', raw, _re.DOTALL)
+    if not match:
+        return None
+    try:
+        return json.loads(match.group())
+    except json.JSONDecodeError:
+        return None
+
+def guardrail_remove(output: TaskOutput) -> tuple[bool, str]:
+    """Guardrail for REMOVE tasks — expects action: remove_items with items[]."""
+    data = _extract_json(output.raw)
+    if data is None:
+        return (False, "Output must contain a valid JSON block. Output ONLY a JSON object with action: remove_items.")
+    if data.get("action") != "remove_items":
+        return (False, "JSON 'action' must be 'remove_items'. Fix the action field and try again.")
+    items = data.get("items", [])
+    if not items:
+        return (False, "JSON must contain a non-empty 'items' array. Each item needs 'title' and 'day'.")
+    for item in items:
+        if "title" not in item or "day" not in item:
+            return (False, f"Every item must have 'title' and 'day'. This item is missing fields: {item}")
+    return (True, output.raw)
+
+def guardrail_modify(output: TaskOutput) -> tuple[bool, str]:
+    """Guardrail for MODIFY tasks — expects action: update_items with updates[]."""
+    data = _extract_json(output.raw)
+    if data is None:
+        return (False, "Output must contain a valid JSON block. Output ONLY a JSON object with action: update_items.")
+    if data.get("action") != "update_items":
+        return (False, "JSON 'action' must be 'update_items'. Fix the action field and try again.")
+    updates = data.get("updates", [])
+    if not updates:
+        return (False, "JSON must contain a non-empty 'updates' array with the items to modify.")
+    for u in updates:
+        if "originalTitle" not in u or "day" not in u:
+            return (False, f"Every update must have 'originalTitle' and 'day'. This is missing fields: {u}")
+    return (True, output.raw)
+
+def guardrail_suggest(output: TaskOutput) -> tuple[bool, str]:
+    """Guardrail for SUGGEST tasks — expects action: smart_schedule with newItems[]."""
+    data = _extract_json(output.raw)
+    if data is None:
+        return (False, "Output must contain a valid JSON block. Output ONLY a JSON object with action: smart_schedule.")
+    if data.get("action") != "smart_schedule":
+        return (False, "JSON 'action' must be 'smart_schedule'. Fix the action field and try again.")
+    new_items = data.get("newItems", [])
+    if not new_items:
+        return (False, "JSON must contain a non-empty 'newItems' array with at least 2 options.")
+    for item in new_items:
+        missing = [f for f in ["title", "day", "duration"] if f not in item]
+        if missing:
+            return (False, f"Item '{item.get('title', '?')}' is missing required fields: {missing}")
+    return (True, output.raw)
+
+def guardrail_plan(output: TaskOutput) -> tuple[bool, str]:
+    """Guardrail for PLAN tasks — expects action: add_items with items[]."""
+    data = _extract_json(output.raw)
+    if data is None:
+        return (False, "Output must contain a valid JSON block. Output ONLY a JSON object with action: add_items.")
+    if data.get("action") != "add_items":
+        return (False, "JSON 'action' must be 'add_items'. Fix the action field and try again.")
+    items = data.get("items", [])
+    if not items:
+        return (False, "JSON must contain a non-empty 'items' array with the planned activities.")
+    for item in items:
+        missing = [f for f in ["title", "day", "duration"] if f not in item]
+        if missing:
+            return (False, f"Item '{item.get('title', '?')}' is missing required fields: {missing}")
+    return (True, output.raw)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -312,7 +392,9 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
             6. For "clear day X", list EVERY item that has day: X in the existing itinerary.
             """,
             agent=fast_modifier_agent,
-            expected_output="JSON block with action: remove_items."
+            expected_output="JSON block with action: remove_items.",
+            guardrail=guardrail_remove,
+            max_retries=3
         )
         
         mod_crew = Crew(
@@ -367,7 +449,9 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
             3. Output ONLY JSON.
             """,
             agent=fast_modifier_agent,
-            expected_output="JSON block with action: update_items."
+            expected_output="JSON block with action: update_items.",
+            guardrail=guardrail_modify,
+            max_retries=3
         )
         
         mod_crew = Crew(
@@ -469,7 +553,9 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
             The user CANNOT see text suggestions - they can ONLY see items added to the itinerary via JSON.
             """,
             agent=suggestion_agent,
-            expected_output="You MUST output a JSON block with action: smart_schedule. This is REQUIRED, not optional."
+            expected_output="You MUST output a JSON block with action: smart_schedule. This is REQUIRED, not optional.",
+            guardrail=guardrail_suggest,
+            max_retries=3
         )
         
         fast_crew = Crew(
@@ -621,7 +707,9 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
             }}
             ```""",
             agent=fast_planner_agent,
-            expected_output="ONLY a JSON block with action: add_items containing THEMED activities. No generic sightseeing!"
+            expected_output="JSON block with action: add_items.",
+            guardrail=guardrail_plan,
+            max_retries=3
         )
         
         fast_crew = Crew(
@@ -637,7 +725,6 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
 
     # ═══════════════════════════════════════════════════════════════
     # PATH 5: FULL CREW FALLBACK (3 Agents, 70B Models)
-    # Handles: GENERAL intent or anything not caught above
     # ═══════════════════════════════════════════════════════════════
     else:
         crew = Crew(
