@@ -13,10 +13,10 @@ llm = ChatNVIDIA(
     model="meta/llama-3.1-70b-instruct",
     api_key=os.environ.get("NVIDIA_NIM_API_KEY"),
     base_url="https://integrate.api.nvidia.com/v1",
-    max_tokens=4096  # Ensure enough tokens for full 7-day itineraries
+    max_tokens=4096
 )
 
-# Fast LLM for suggestions (8B is 4x faster: ~170 tok/s vs ~39 tok/s)
+# Fast LLM for suggestions (8B)
 fast_llm = ChatNVIDIA(
     model="meta/llama-3.1-8b-instruct",
     api_key=os.environ.get("NVIDIA_NIM_API_KEY"),
@@ -26,7 +26,7 @@ fast_llm = ChatNVIDIA(
 
 from crewai.tools import tool
 
-# Tool 2: FAST web search (Serper)
+# Tool: FAST web search (Serper)
 @tool("Fast Web Search")
 def fast_search_tool(query: str):
     """Search the web quickly using Serper API. Returns relevant results for travel, restaurants, and attractions."""
@@ -80,7 +80,64 @@ def log_debug(message: str):
         with open("ai_debug.log", "a") as f:
             f.write(f"\n[{pd.Timestamp.now()}] {message}\n")
     except:
-        pass # strict dependency avoidance
+        pass
+
+
+# ═══════════════════════════════════════════════════════════════
+# LLM-BASED INTENT CLASSIFIER
+# Uses fast_llm
+# ═══════════════════════════════════════════════════════════════
+ROUTE_PROMPT = """Classify the user's intent into exactly ONE category. Reply with ONLY the category name, nothing else.
+
+Categories:
+- REMOVE: User wants to delete, remove, cancel, clear, or empty items from the itinerary
+- MODIFY: User wants to move, reschedule, change time, rename, or update existing items (NOT add new ones)
+- SUGGEST: User wants suggestions, recommendations, options, places, or to add new activities to a specific day
+- PLAN: User wants to create, generate, or build a full itinerary or plan for the entire trip (or multiple days)
+- GENERAL: Anything else — greetings, questions, off-topic
+
+Examples:
+"remove breakfast from day 1" → REMOVE
+"I don't want the museum anymore" → REMOVE
+"move lunch to 2pm" → MODIFY
+"reschedule the hike to day 3" → MODIFY
+"suggest some restaurants for day 2" → SUGGEST
+"find me a good sushi place" → SUGGEST
+"I want to go scuba diving on day 3" → SUGGEST
+"create an adventurous itinerary" → PLAN
+"plan my trip" → PLAN
+"make an itinerary for 5 days" → PLAN
+"hello" → GENERAL
+
+User query: {query}
+Category:"""
+
+def classify_intent(user_query: str) -> str:
+    try:
+        response = fast_llm.invoke(ROUTE_PROMPT.format(query=user_query))
+        intent = response.content.strip().split()[0].upper()  # Take first word only
+        valid_intents = {"MODIFY", "REMOVE", "SUGGEST", "PLAN", "GENERAL"}
+        if intent in valid_intents:
+            print(f"[ROUTER] Query: '{user_query}' → Intent: {intent}")
+            return intent
+    except Exception as e:
+        print(f"[ROUTER] LLM classification failed: {e}")
+    
+    # Fallback: keyword-based classification if LLM fails
+    q = user_query.lower()
+    if any(w in q for w in ["delete", "remove", "cancel", "clear", "empty", "reset"]):
+        intent = "REMOVE"
+    elif any(w in q for w in ["move", "change", "update", "shift", "reschedule"]):
+        intent = "MODIFY"
+    elif any(w in q for w in ["suggest", "recommend", "options", "places", "spots", "ideas"]):
+        intent = "SUGGEST"
+    elif any(w in q for w in ["create", "make", "plan", "generate", "build"]) and any(w in q for w in ["itinerary", "trip", "schedule"]):
+        intent = "PLAN"
+    else:
+        intent = "SUGGEST"
+    
+    print(f"[ROUTER] Query: '{user_query}' → Intent: {intent} (keyword fallback)")
+    return intent
 
 def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: list) -> str:
     """Create and run a crew to generate trip suggestions."""
@@ -207,121 +264,133 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
         expected_output="A JSON block with action: add_items. NO conversational text.",
     )
 
+    # ═══════════════════════════════════════════════════════════════
+    # LLM-BASED INTENT ROUTING
+    # ═══════════════════════════════════════════════════════════════
+    intent = classify_intent(user_query)
     query_lower = user_query.lower()
 
-    # FAST PATH: Itinerary modifications (move, update, remove)
-    is_modification = any(word in query_lower for word in ["move", "change", "update", "shift", "reschedule", "delete", "remove", "cancel", "clear", "empty", "reset"])
-    
-    # Check if this is a removal/deletion request
-    is_removal = any(word in query_lower for word in ["delete", "remove", "cancel", "clear", "empty", "reset"])
-    
-    if is_modification:
-        if is_removal:
-            # Handle removal requests with remove_items action
-            mod_task = Task(
-                description=f"""The user wants to REMOVE item(s) from the itinerary.
-                
-                User Request: {user_query}
-                
-                Existing Itinerary:
-                {itinerary_str}
-                
-                Trip Settings: {context_str}
-                
-                Identify the EXACT item(s) to remove based on the user's request.
-                Match the title and day from the existing itinerary.
-                
-                OUTPUT ONLY JSON (no text) with action "remove_items".
-                
-                Format:
-                ```json
-                {{
-                    "action": "remove_items",
-                    "items": [
-                        {{
-                            "title": "Exact title from itinerary",
-                            "day": 1
-                        }}
-                    ]
-                }}
-                ```
-                
-                RULES:
-                1. Use the EXACT title as it appears in the existing itinerary.
-                2. Ensure "day" matches the item's day.
-                3. Output ONLY JSON, no other text.
-                4. If user says "remove breakfast for day 1", find "Breakfast" on day 1.
-                5. If user says "clear day X" or "empty day X" or "reset day X", include ALL items from day X in the removal list.
-                6. For "clear day X", list EVERY item that has day: X in the existing itinerary.
-                """,
-                agent=fast_modifier_agent,
-                expected_output="JSON block with action: remove_items."
-            )
-        else:
-            # Handle other modifications (move, reschedule, rename)
-            mod_task = Task(
-                description=f"""The user wants to MODIFY the itinerary.
-                
-                User Request: {user_query}
-                
-                Existing Itinerary:
-                {itinerary_str}
-                
-                Trip Settings: {context_str}
-                
-                Identify the item(s) to modify.
-                
-                OUTPUT ONLY JSON (no text) with action "update_items".
-                
-                Format:
-                ```json
-                {{
-                    "action": "update_items",
-                    "updates": [
-                        {{
-                            "originalTitle": "Exact or partial title of item",
-                            "day": 1,
-                            "newStartTime": "20:00",
-                            "newEndTime": "22:00"
-                        }}
-                    ]
-                }}
-                ```
-                
-                For moving items: Update startTime and endTime.
-                For renaming: Add "newTitle": "New Name".
-                
-                RULES:
-                1. Use 24-hour format for times (HH:MM).
-                2. Ensure "day" matches the item's day.
-                3. Output ONLY JSON.
-                """,
-                agent=fast_modifier_agent,
-                expected_output="JSON block with action: update_items."
-            )
+    # ═══════════════════════════════════════════════════════════════
+    # PATH 1: REMOVAL (8B Model)
+    # ═══════════════════════════════════════════════════════════════
+    if intent == "REMOVE":
+        # Handle removal requests with remove_items action
+        mod_task = Task(
+            description=f"""The user wants to REMOVE item(s) from the itinerary.
+            
+            User Request: {user_query}
+            
+            Existing Itinerary:
+            {itinerary_str}
+            
+            Trip Settings: {context_str}
+            
+            Identify the EXACT item(s) to remove based on the user's request.
+            Match the title and day from the existing itinerary.
+            
+            OUTPUT ONLY JSON (no text) with action "remove_items".
+            
+            Format:
+            ```json
+            {{
+                "action": "remove_items",
+                "items": [
+                    {{
+                        "title": "Exact title from itinerary",
+                        "day": 1
+                    }}
+                ]
+            }}
+            ```
+            
+            RULES:
+            1. Use the EXACT title as it appears in the existing itinerary.
+            2. Ensure "day" matches the item's day.
+            3. Output ONLY JSON, no other text.
+            4. If user says "remove breakfast for day 1", find "Breakfast" on day 1.
+            5. If user says "clear day X" or "empty day X" or "reset day X", include ALL items from day X in the removal list.
+            6. For "clear day X", list EVERY item that has day: X in the existing itinerary.
+            """,
+            agent=fast_modifier_agent,
+            expected_output="JSON block with action: remove_items."
+        )
         
-        fast_crew = Crew(
+        mod_crew = Crew(
             agents=[fast_modifier_agent],
             tasks=[mod_task],
             process=Process.sequential,
             verbose=True
         )
-        result = fast_crew.kickoff()
+        result = mod_crew.kickoff()
         return str(result)
 
-    # FAST PATH: Targeted Suggestions (Search + Format in one step)
-    # Also captures "add X" requests which should go through smart scheduling
-    is_suggestion_request = any(w in query_lower for w in ["suggest", "recommend", "options", "places", "spots", "ideas", "add", "include", "want", "need"])
-    
-    if is_suggestion_request:
+    # ═══════════════════════════════════════════════════════════════
+    # PATH 2: MODIFICATION (8B Model)
+    # ═══════════════════════════════════════════════════════════════
+    elif intent == "MODIFY":
+        # Handle modifications (move, reschedule, rename)
+        mod_task = Task(
+            description=f"""The user wants to MODIFY the itinerary.
+            
+            User Request: {user_query}
+            
+            Existing Itinerary:
+            {itinerary_str}
+            
+            Trip Settings: {context_str}
+            
+            Identify the item(s) to modify.
+            
+            OUTPUT ONLY JSON (no text) with action "update_items".
+            
+            Format:
+            ```json
+            {{
+                "action": "update_items",
+                "updates": [
+                    {{
+                        "originalTitle": "Exact or partial title of item",
+                        "day": 1,
+                        "newStartTime": "20:00",
+                        "newEndTime": "22:00"
+                    }}
+                ]
+            }}
+            ```
+            
+            For moving items: Update startTime and endTime.
+            For renaming: Add "newTitle": "New Name".
+            
+            RULES:
+            1. Use 24-hour format for times (HH:MM).
+            2. Ensure "day" matches the item's day.
+            3. Output ONLY JSON.
+            """,
+            agent=fast_modifier_agent,
+            expected_output="JSON block with action: update_items."
+        )
+        
+        mod_crew = Crew(
+            agents=[fast_modifier_agent],
+            tasks=[mod_task],
+            process=Process.sequential,
+            verbose=True
+        )
+        result = mod_crew.kickoff()
+        return str(result)
+
+    # ═══════════════════════════════════════════════════════════════
+    # PATH 3: SUGGESTION (8B Model + Serper Search)
+    # ═══════════════════════════════════════════════════════════════
+    elif intent == "SUGGEST":
         # Create a specialized agent that can search AND format
-        # Uses fast_llm (8B, 4x faster) and fast_search_tool (Serper, 10x faster)
+        # Uses fast_llm and fast_search_tool
         suggestion_agent = Agent(
             role="Local Expert & Planner",
             goal="Find the best places matching the request and format them for the itinerary.",
             backstory="You are a knowledgeable local guide who knows the best spots. You are efficiency-focused and always return structured data.",
             tools=[fast_search_tool],
-            llm=fast_llm,  # 8B model: 4x faster than 70B
+            llm=fast_llm,
             verbose=True
         )
 
@@ -414,25 +483,15 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
         log_to_file("SUGGESTION RESULT", result)
         return str(result)
     
-    # FAST PATH: General itinerary planning (no web search needed)
-    # Check for keywords rather than exact phrases to be more robust
-    has_action = any(w in query_lower for w in ["create", "make", "plan", "generate", "suggest", "build"])
-    has_object = any(w in query_lower for w in ["itinerary", "itenary", "plan", "trip", "schedule"])
-    
-    is_general_planning = has_action and has_object
-    
-    needs_web_search = any(phrase in query_lower for phrase in [
-        "restaurant", "hotel", "specific", "recommend", "best place",
-        "where to eat", "where to stay", "find me", "search for"
-    ])
-    
-    if is_general_planning and not needs_web_search:
-        # Use 70B model with higher max_tokens for longer trips (7 days = ~42 items)
+    # ═══════════════════════════════════════════════════════════════
+    # PATH 4: GENERAL PLANNING (70B Model, no web search)
+    # ═══════════════════════════════════════════════════════════════
+    elif intent == "PLAN":
         planning_llm = ChatNVIDIA(
             model="meta/llama-3.1-70b-instruct",
             api_key=os.environ.get("NVIDIA_NIM_API_KEY"),
             base_url="https://integrate.api.nvidia.com/v1",
-            max_tokens=4096  # Ensure enough tokens for full 7-day itinerary
+            max_tokens=4096
         )
 
         # Extract theme/adjectives from user query for emphasis
@@ -575,72 +634,18 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
         result = fast_crew.kickoff()
         return str(result)
 
-    # Special handling for "add to itinerary" intent - FAST PATH
-    if "add" in user_query.lower() and ("itinerary" in user_query.lower() or "them" in user_query.lower()):
-        add_task = Task(
-            description=f"""The user wants to ADD the previous suggestions to the itinerary as OPTIONS TO VOTE ON.
-            
-            Chat History:
-            {chat_str}
-            
-            User Request: {user_query}
-            
-            Extract the most recent suggested items from the AI's previous messages in the chat history.
-            
-            CRITICAL: These are MUTUALLY EXCLUSIVE OPTIONS - the group will vote to pick ONE.
-            Therefore, ALL items MUST have the SAME day and SAME duration/slot.
-            
-            Format them as a valid JSON object:
-            {{
-                "action": "add_items",
-                "replacementStrategy": "append",
-                "isOptions": true,
-                "items": [
-                    {{
-                        "title": "Option 1 Name",
-                        "description": "Brief description",
-                        "day": 1,
-                        "duration": 180,
-                        "location": "Address"
-                    }},
-                    {{
-                        "title": "Option 2 Name",
-                        "description": "Brief description", 
-                        "day": 1,
-                        "duration": 180,
-                        "location": "Address"
-                    }}
-                ]
-            }}
-            
-            RULES:
-            1. ALL items MUST have the SAME day number.
-            2. ALL items MUST have the SAME duration.
-            3. Pick a reasonable evening duration if context implies evening.
-            4. Return ONLY the JSON, nothing before it.
-            """,
-            agent=planner_agent,
-            expected_output="A JSON object with action and items, all sharing the same day and duration."
-        )
-        
-        # Use simple single-task crew for speed
-        fast_crew = Crew(
-            agents=[planner_agent],
-            tasks=[add_task],
+
+    # ═══════════════════════════════════════════════════════════════
+    # PATH 5: FULL CREW FALLBACK (3 Agents, 70B Models)
+    # Handles: GENERAL intent or anything not caught above
+    # ═══════════════════════════════════════════════════════════════
+    else:
+        crew = Crew(
+            agents=[search_agent, preference_agent, planner_agent],
+            tasks=[search_task, preference_task, planning_task],
             process=Process.sequential,
             verbose=True
         )
         
-        result = fast_crew.kickoff()
+        result = crew.kickoff()
         return str(result)
-    
-    # Create and run full crew for regular suggestions
-    crew = Crew(
-        agents=[search_agent, preference_agent, planner_agent],
-        tasks=[search_task, preference_task, planning_task],
-        process=Process.sequential,
-        verbose=True
-    )
-    
-    result = crew.kickoff()
-    return str(result)

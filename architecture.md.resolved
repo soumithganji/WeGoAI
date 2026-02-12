@@ -54,40 +54,61 @@
             ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │              QUERY ROUTING (backend/ai/crew.py)                         │
-│  ┌───────────────────┐        ┌─────────────────────────────────────┐   │
-│  │  Keyword Detection│───────►│  Route to appropriate path          │   │
-│  └─────────┬─────────┘        └─────────────────────────────────────┘   │
+│  ┌───────────────────────┐    ┌─────────────────────────────────────┐   │
+│  │  LLM Intent Classifier│───►│  Route to appropriate path          │   │
+│  │  (classify_intent)    │    └─────────────────────────────────────┘   │
+│  │  Model: Llama 3.1 8B  │    Fallback: keyword-based if LLM fails      │
+│  └─────────┬─────────────┘                                              │
 │            │                                                            │
 │  ┌─────────▼───────────────────────────────────────────────────────┐    │
-│  │  IF "move, delete, update, remove, cancel, clear"               │    │
-│  │     → FAST MODIFICATION PATH (8B Model)                         │    │
+│  │  Intent: REMOVE                                                 │    │
+│  │     → PATH 1: REMOVAL (8B Model)                                │    │
 │  │                                                                 │    │
-│  │  ELIF "suggest, recommend, options, places, add, want, need"    │    │
-│  │     → FAST SUGGESTION PATH (8B Model + Serper Search)           │    │
+│  │  Intent: MODIFY                                                 │    │
+│  │     → PATH 2: MODIFICATION (8B Model)                           │    │
 │  │                                                                 │    │
-│  │  ELIF "create, make, plan, generate itinerary"                  │    │
-│  │     → GENERAL PLANNING PATH (70B Model)                         │    │
+│  │  Intent: SUGGEST                                                │    │
+│  │     → PATH 3: SUGGESTION (8B Model + Serper Search)             │    │
 │  │                                                                 │    │
-│  │  ELSE                                                           │    │
-│  │     → FULL CREW PATH (3 Agents, 70B Models)                     │    │
+│  │  Intent: PLAN                                                   │    │
+│  │     → PATH 4: GENERAL PLANNING (70B Model)                      │    │
+│  │                                                                 │    │
+│  │  Intent: GENERAL                                                │    │
+│  │     → PATH 5: FULL CREW (3 Agents, 70B Models)                  │    │
 │  └─────────────────────────────────────────────────────────────────┘    │
-└───────────┼──────────────────────────────────────────────────────────-──┘
+└───────────┼────────────────────────────────────────────────────────────-┘
             │
 ┌───────────▼───────────────────────────────────────────────────────────┐
-│                    PATH 1: FAST MODIFICATION                          │
+│                    PATH 1: REMOVAL                                    │
 │                    Model: Llama 3.1 8B (~170 tok/s)                   │
 │  ┌─────────────────────────────────────────────────────────────────┐  │
 │  │  Agent: fast_modifier_agent                                     │  │
-│  │  Task: Parse user request, output JSON action                   │  │
+│  │  Task: Identify items to delete, output JSON action             │  │
 │  │                                                                 │  │
 │  │  Example: "remove breakfast from day 1"                         │  │
 │  │  Output: {"action": "remove_items",                             │  │
 │  │           "items": [{"title": "Breakfast", "day": 1}]}          │  │
+│  │  Handles: "clear day X" → removes ALL items from that day       │  │
 │  └─────────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────────┘
 
 ┌───────────────────────────────────────────────────────────────────────┐
-│                    PATH 2: FAST SUGGESTION                            │
+│                    PATH 2: MODIFICATION                               │
+│                    Model: Llama 3.1 8B (~170 tok/s)                   │
+│  ┌─────────────────────────────────────────────────────────────────┐  │
+│  │  Agent: fast_modifier_agent                                     │  │
+│  │  Task: Parse modify request, output JSON action                 │  │
+│  │                                                                 │  │
+│  │  Example: "move lunch to 2pm"                                   │  │
+│  │  Output: {"action": "update_items",                             │  │
+│  │           "updates": [{"originalTitle": "Lunch", "day": 1,      │  │
+│  │                        "newStartTime": "14:00"}]}               │  │
+│  │  Handles: move, reschedule, rename, change time                 │  │
+│  └─────────────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────┐
+│                    PATH 3: SUGGESTION                                 │
 │                    Model: Llama 3.1 8B + Google Serper                │
 │  ┌─────────────────────────────────────────────────────────────────┐  │
 │  │  STEP 1: Web Search via Serper API                              │  │
@@ -101,6 +122,7 @@
 │  │  ┌─────────────────────────────────────────────────────────┐    │  │
 │  │  │  Agent: suggestion_agent (8B LLM)                       │    │  │
 │  │  │  - Analyze existing schedule for conflicts              │    │  │
+│  │  │  - Validate requested day exists in trip                │    │  │
 │  │  │  - Generate 2-3 options with same time slot             │    │  │
 │  │  │  - Output: smart_schedule JSON                          │    │  │
 │  │  └─────────────────────────────────────────────────────────┘    │  │
@@ -112,7 +134,7 @@
 └───────────────────────────────────────────────────────────────────────┘
 
 ┌───────────────────────────────────────────────────────────────────────┐
-│                    PATH 3: GENERAL PLANNING                           │
+│                    PATH 4: GENERAL PLANNING                           │
 │                    Model: Llama 3.1 70B                               │
 │  ┌─────────────────────────────────────────────────────────────────┐  │
 │  │  STEP 1: Extract Theme Keywords                                 │  │
@@ -137,7 +159,8 @@
 └───────────────────────────────────────────────────────────────────────┘
 
 ┌───────────────────────────────────────────────────────────────────────┐
-│                    PATH 4: FULL CREW (3 AGENTS)                       │
+│                    PATH 5: FULL CREW (3 AGENTS)                       │
+│                    Handles: GENERAL intent (fallback)                 │
 │                    Models: All Llama 3.1 70B                          │
 │  ┌─────────────────────────────────────────────────────────────────┐  │
 │  │  AGENT 1: Search Agent                                          │  │
