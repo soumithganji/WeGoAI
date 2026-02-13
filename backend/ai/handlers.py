@@ -22,9 +22,7 @@ class handler(BaseHTTPRequestHandler):
             
             query = body.get('query', '')
             trip_context = body.get('tripContext', {})
-            chat_history = body.get('chatHistory', [])
-            action = body.get('action', 'suggest')
-            scope = body.get('scope', 'everything')  
+            chat_history = body.get('chatHistory', [])  
             
             result = create_suggestion_crew(query, trip_context, chat_history)
             

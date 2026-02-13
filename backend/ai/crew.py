@@ -77,14 +77,6 @@ fast_modifier_agent = Agent(
     verbose=True
 )
 
-def log_debug(message: str):
-    """Log debug info to a file."""
-    try:
-        with open("ai_debug.log", "a") as f:
-            f.write(f"\n[{pd.Timestamp.now()}] {message}\n")
-    except:
-        pass
-
 
 # ═══════════════════════════════════════════════════════════════
 # GUARDRAIL FUNCTIONS
@@ -570,7 +562,7 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
         return str(result)
     
     # ═══════════════════════════════════════════════════════════════
-    # PATH 4: GENERAL PLANNING (70B Model, no web search)
+    # PATH 4: Fast PLANNING (70B Model, no web search)
     # ═══════════════════════════════════════════════════════════════
     elif intent == "PLAN":
         planning_llm = ChatNVIDIA(
@@ -685,14 +677,6 @@ def create_suggestion_crew(user_query: str, trip_context: dict, chat_history: li
             7. Do NOT output multiple JSON blocks.
             8. Set "replacementStrategy" to "replace" (default for new plans).
             9. CRITICAL: Use "duration" (in minutes). Time fields (startTime/endTime) are OPTIONAL.
-            
-            IF USER ASKED FOR "ADVENTUROUS" - USE THESE ACTIVITIES:
-            Morning: Scuba Diving, Hiking Trek, Paragliding, Rock Climbing, Zip-lining, Kayaking
-            Afternoon: White Water Rafting, Cliff Jumping, ATV Ride, Jungle Safari, Snorkeling, Surfing
-            Evening: Night Safari, Camping, Bonfire, Stargazing, Night Dive
-            
-            ❌ WRONG for adventurous: "Visit Museum", "City Tour", "Shopping", "Spa"
-            ✅ CORRECT for adventurous: "Scuba Diving", "Jungle Trekking", "Paragliding", "Rafting"
             
             OUTPUT FORMAT:
             ```json

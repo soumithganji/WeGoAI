@@ -119,38 +119,48 @@ export async function POST(request: NextRequest) {
                 });
 
 
-                // --- ROBUST MULTI-BLOCK JSON PARSING ---
+                // --- Step 1: RECEIVE & LOG THE RAW AI RESPONSE ---
+                // The AI returns { success, result }. `result` may contain plain text,
+                // embedded JSON action blocks, or both.
+
                 const aiResult = await aiResponse.json();
                 let finalContent = aiResult.result || '';
 
+                // Debug logging
                 console.log('================================================================================');
                 console.log('RAW AI RESPONSE START (Length: ' + finalContent.length + ')');
                 console.log(finalContent);
                 console.log('RAW AI RESPONSE END');
                 console.log('================================================================================');
 
-                let messageContent = finalContent; // This will be cleaned up
+                // `messageContent` will hold the user-facing text after JSON blocks are stripped out
+                let messageContent = finalContent;
 
-                // Helper to extract loop over all code-fenced JSON blocks
-                // Regex: match ```json or ``` (case insensitive), capture content, match ```
+                // --- Step 2: EXTRACT JSON BLOCKS FROM THE AI RESPONSE ---
+                // look for ```json``` code fences. fallback: find raw JSON via brace-balancing.
+
+                // --- Strategy A: Extract all code-fenced JSON blocks ---
+                // Regex matches ```json ... ``` or ``` ... ``` (case-insensitive)
                 const codeFenceRegex = /```(?:json)?\s*([\s\S]*?)\s*```/gi;
                 let match;
                 const jsonBlocks: string[] = [];
 
-                // 1. Extract all code-fenced JSON blocks
                 while ((match = codeFenceRegex.exec(finalContent)) !== null) {
                     jsonBlocks.push(match[1]);
-                    // Remove the block from the messageContent
+                    // Strip the JSON code fence from the user-facing message text
                     messageContent = messageContent.replace(match[0], '').trim();
                 }
 
-                // 2. If no fenced blocks found, try to find a single raw JSON object
+                // We look for `{"action": "<known_action>"`
+                // and then use brace-balancing to find the complete JSON object.
                 if (jsonBlocks.length === 0) {
+                    // Pattern matches the start of a valid action JSON object
                     const jsonStartPattern = /\{\s*"action"\s*:\s*"(add_items|update_items|remove_items|smart_schedule|update_preferences)"/;
                     const startMatch = finalContent.match(jsonStartPattern);
 
                     if (startMatch && startMatch.index !== undefined) {
-                        // Attempt to balance braces
+                        // Brace-balancing parser: walk character by character to find
+                        // the matching closing brace, handling strings and escape chars
                         let braceCount = 0;
                         let inString = false;
                         let escaped = false;
@@ -167,7 +177,7 @@ export async function POST(request: NextRequest) {
                                 else if (char === '}') {
                                     braceCount--;
                                     if (braceCount === 0) {
-                                        endIndex = i + 1;
+                                        endIndex = i + 1; // Found the complete JSON object
                                         break;
                                     }
                                 }
@@ -177,13 +187,16 @@ export async function POST(request: NextRequest) {
                         if (endIndex !== -1) {
                             const rawJson = finalContent.substring(jsonStartIndex, endIndex);
                             jsonBlocks.push(rawJson);
-                            // Remove from message
+                            // Strip the raw JSON from the user-facing message text
                             messageContent = messageContent.replace(rawJson, '').trim();
                         }
                     }
                 }
 
-                // 3. Process ALL found JSON blocks
+                // --- Step 3: ACTION DISPATCHER ---
+                // Parse each JSON block and dispatch based on `action` field.
+                // Supported: add_items, update_items, remove_items, update_preferences, smart_schedule
+
                 let hasProcessedAction = false;
 
                 for (const jsonStr of jsonBlocks) {
@@ -191,13 +204,16 @@ export async function POST(request: NextRequest) {
                         const actionData = JSON.parse(jsonStr);
                         console.log('PROCESSING ACTION:', actionData.action);
 
-                        // --- ACTION: ADD ITEMS ---
+                        // --- ACTION: add_items ---
+                        // Adds new itinerary items. isOptions=true → voteable options (grouped),
+                        // isOptions=false → sequential scheduling. replacementStrategy: 'replace' or 'append'.
                         if (actionData.action === 'add_items' && Array.isArray(actionData.items)) {
-                            // Extract strategy
                             const replacementStrategy = actionData.replacementStrategy || 'replace';
                             const isOptions = actionData.isOptions === true;
 
-                            // Helper to validate HH:MM format
+                            // --- Time utility helpers (used throughout this action) ---
+
+                            // Validates that a string is in "HH:MM" 24-hour format
                             const isValidTime = (time: string) => {
                                 if (!time || typeof time !== 'string') return false;
                                 const match = time.match(/^(\d{1,2}):(\d{2})$/);
@@ -207,14 +223,14 @@ export async function POST(request: NextRequest) {
                                 return h >= 0 && h <= 23 && m >= 0 && m <= 59;
                             };
 
-                            // Helper to convert HH:MM to minutes
+                            // Converts "HH:MM" → total minutes (e.g., "09:30" → 570)
                             const toMinutes = (time: string) => {
                                 if (!isValidTime(time)) return 0;
                                 const [h, m] = time.split(':').map(Number);
                                 return h * 60 + m;
                             };
 
-                            // Helper to convert minutes to HH:MM
+                            // Converts total minutes → "HH:MM" (e.g., 570 → "09:30")
                             const toTimeStr = (mins: number) => {
                                 const h = Math.floor(mins / 60) % 24;
                                 const m = mins % 60;
@@ -227,15 +243,15 @@ export async function POST(request: NextRequest) {
                             const newItems: any[] = [];
 
                             if (isOptions) {
-                                // CASE 1: Mutually exclusive options (same time slot)
+                                // --- OPTION MODE: Mutually exclusive choices ---
+                                // All items share the same time slot and a `groupId`.
+                                // The UI presents these as voteable options (pick one).
                                 const groupId = uuidv4();
                                 const day = actionData.items[0]?.day || 1;
 
-                                // Determine time slot
-                                let startTime = '20:00'; // Default evening if not specified
+                                let startTime = '20:00';
                                 let duration = 180;
 
-                                // Use first item's time/duration if available
                                 if (actionData.items[0]?.duration) duration = actionData.items[0].duration;
                                 if (isValidTime(actionData.items[0]?.startTime)) startTime = actionData.items[0].startTime;
 
@@ -252,15 +268,16 @@ export async function POST(request: NextRequest) {
                                     endTime,
                                     duration,
                                     location: item.location || '',
-                                    groupId,
+                                    groupId,      // Links these items as mutually exclusive options
                                     votes: { yes: [], no: [] },
                                     status: 'pending',
                                     suggestedBy: 'ai',
                                     createdAt: new Date()
                                 })));
                             } else {
-                                // CASE 2: Sequential items (schedule them)
-                                // Sort by day to keep structure
+                                // --- SEQUENTIAL MODE: Schedule items one after another ---
+                                // Group items by day, then assign sequential time slots
+                                // starting from 09:00 AM (or after existing items if appending)
                                 const itemsByDay = new Map<number, any[]>();
                                 actionData.items.forEach((item: any) => {
                                     const d = item.day || 1;
@@ -268,26 +285,25 @@ export async function POST(request: NextRequest) {
                                     itemsByDay.get(d)?.push(item);
                                 });
 
-                                // Process each day
                                 itemsByDay.forEach((dayItems, day) => {
-                                    let currentMins = 9 * 60; // Start at 09:00 AM by default
+                                    let currentMins = 9 * 60; // Default: start scheduling at 09:00
 
-                                    // If appending, find end of last existing item for this day
+                                    // If using 'append' strategy, find the latest end time
+                                    // on this day and start scheduling after a 30-min buffer
                                     if (replacementStrategy === 'append') {
                                         const existingDayItems = tripDoc.itinerary.filter((i: any) => i.day === day);
                                         if (existingDayItems.length > 0) {
-                                            // Find max end time
                                             existingDayItems.forEach((i: any) => {
                                                 if (i.endTime) currentMins = Math.max(currentMins, toMinutes(i.endTime));
                                             });
-                                            currentMins += 30; // Add 30 min buffer
+                                            currentMins += 30; // 30-min gap between last existing and new items
                                         }
                                     }
 
                                     dayItems.forEach((item: any, index: number) => {
                                         const duration = item.duration || 60;
 
-                                        // Use provided time if valid, otherwise schedule
+                                        // Use the AI-provided start time if valid; otherwise auto-schedule
                                         let sMins = currentMins;
                                         if (isValidTime(item.startTime)) {
                                             sMins = toMinutes(item.startTime);
@@ -303,7 +319,7 @@ export async function POST(request: NextRequest) {
                                             startTime: toTimeStr(sMins),
                                             endTime: toTimeStr(eMins),
                                             duration,
-                                            order: index, // sequence
+                                            order: index,
                                             location: item.location || '',
                                             votes: { yes: [], no: [] },
                                             status: 'pending',
@@ -311,19 +327,20 @@ export async function POST(request: NextRequest) {
                                             createdAt: new Date()
                                         });
 
-                                        currentMins = eMins + 30; // buffer for next item
+                                        currentMins = eMins + 30; // 30-min buffer before next item
                                     });
                                 });
                             }
 
-                            // Handling replacements
+                            // --- Replacement strategy: clean up old items before adding new ones ---
+                            // 'replace' mode: remove previous AI-suggested items on affected days
+                            // 'append' mode: keep everything, just add to the end
                             const itemsToRemove = new Set<string>();
                             if (replacementStrategy === 'replace') {
-                                // Add logic to clear existing items for the affected days
                                 const affectedDays = new Set(newItems.map(i => i.day));
                                 tripDoc.itinerary.forEach((item: any) => {
                                     if (affectedDays.has(item.day)) {
-                                        // Only remove AI suggestions or generic items.
+                                        // Only remove AI-suggested or generic meal items, not user-created ones
                                         if (item.suggestedBy === 'ai' || ['breakfast', 'lunch', 'dinner'].includes(item.title.toLowerCase())) {
                                             itemsToRemove.add(item.id);
                                         }
@@ -336,6 +353,7 @@ export async function POST(request: NextRequest) {
                                 tripDoc.itinerary = tripDoc.itinerary.filter((item: any) => !itemsToRemove.has(item.id));
                             }
 
+                            // --- Persist the new items to the database ---
                             tripDoc.itinerary.push(...newItems);
                             await tripDoc.save();
                             console.log(`Added ${newItems.length} items to itinerary`);
@@ -345,13 +363,15 @@ export async function POST(request: NextRequest) {
                                 messageContent = `I've added ${newItems.length} options to the itinerary for you to vote on. Check out the Itinerary panel!`;
                             }
 
-                            // --- ACTION: UPDATE ITEMS ---
+                            // --- ACTION: update_items ---
+                            // Modifies existing items (e.g., times). Matches by fuzzy title + day number.
                         } else if (actionData.action === 'update_items' && Array.isArray(actionData.updates)) {
                             const tripDoc = await Trip.findById(tripId);
                             if (tripDoc) {
                                 let updatedCount = 0;
                                 for (const update of actionData.updates) {
-                                    // Find item logic: match title/day, or try to guess
+                                    // Fuzzy match: find an itinerary item whose title partially
+                                    // matches the update's originalTitle AND is on the same day
                                     const item = tripDoc.itinerary.find((i: any) => {
                                         const titleMatch = i.title.toLowerCase().includes(update.originalTitle.toLowerCase()) ||
                                             update.originalTitle.toLowerCase().includes(i.title.toLowerCase());
@@ -371,18 +391,20 @@ export async function POST(request: NextRequest) {
                                 }
                             }
 
-                            // --- ACTION: REMOVE ITEMS ---
+                            // --- ACTION: remove_items ---
+                            // Removes items from the itinerary. Matches by fuzzy title + day number.
                         } else if (actionData.action === 'remove_items' && Array.isArray(actionData.items)) {
                             const tripDoc = await Trip.findById(tripId);
                             if (tripDoc) {
                                 const initialLength = tripDoc.itinerary.length;
+                                // Filter out items that match any of the removal targets
                                 tripDoc.itinerary = tripDoc.itinerary.filter((item: any) => {
                                     for (const toRemove of actionData.items) {
                                         const titleMatch = item.title.toLowerCase().includes(toRemove.title.toLowerCase()) ||
                                             toRemove.title.toLowerCase().includes(item.title.toLowerCase());
-                                        if (titleMatch && item.day === toRemove.day) return false;
+                                        if (titleMatch && item.day === toRemove.day) return false; // Remove this item
                                     }
-                                    return true;
+                                    return true; // Keep this item
                                 });
 
                                 const removedCount = initialLength - tripDoc.itinerary.length;
@@ -395,14 +417,18 @@ export async function POST(request: NextRequest) {
                                 }
                             }
 
-                            // --- ACTION: UPDATE PREFERENCES ---
+                            // --- ACTION: update_preferences ---
+                            // Updates trip preferences (dietary, interests, constraints, budget).
+                            // Uses Set-based merging to avoid duplicates.
                         } else if (actionData.action === 'update_preferences' && actionData.preferences) {
                             const tripDoc = await Trip.findById(tripId);
                             if (tripDoc) {
+                                // Initialize preferences if they don't exist yet
                                 if (!tripDoc.preferences) tripDoc.preferences = { dietary: [], interests: [], constraints: [], budget: '' };
                                 const newPrefs = actionData.preferences;
                                 let updatedCount = 0;
 
+                                // Merge each preference array using Sets to deduplicate
                                 if (Array.isArray(newPrefs.dietary)) {
                                     const set = new Set([...(tripDoc.preferences.dietary || []), ...newPrefs.dietary]);
                                     if (set.size > (tripDoc.preferences.dietary?.length || 0)) { tripDoc.preferences.dietary = Array.from(set); updatedCount++; }
@@ -427,12 +453,13 @@ export async function POST(request: NextRequest) {
                                 }
                             }
 
-                            // If this was an implicit update (no text), notify user
                             if (!messageContent.trim()) {
                                 messageContent = "I've noted your preferences for the trip!";
                             }
 
-                            // --- ACTION: SMART SCHEDULE ---
+                            // --- ACTION: smart_schedule ---
+                            // Combined remove-and-add: removes old items then adds new ones atomically.
+                            // Supports same two modes as add_items (options vs sequential).
                         } else if (actionData.action === 'smart_schedule' && Array.isArray(actionData.newItems)) {
                             const tripDoc = await Trip.findById(tripId);
                             if (!tripDoc) throw new Error('Trip not found');
@@ -441,7 +468,7 @@ export async function POST(request: NextRequest) {
                             const itemsToRemove = actionData.itemsToRemove || [];
                             const targetDay = actionData.newItems[0]?.day || 1;
 
-                            // Helper to validate HH:MM format
+                            // --- Time utility helpers (same as add_items) ---
                             const isValidTime = (time: string) => {
                                 if (!time || typeof time !== 'string') return false;
                                 const match = time.match(/^(\d{1,2}):(\d{2})$/);
@@ -451,29 +478,26 @@ export async function POST(request: NextRequest) {
                                 return h >= 0 && h <= 23 && m >= 0 && m <= 59;
                             };
 
-                            // Helper to convert HH:MM to minutes
                             const toMinutes = (time: string) => {
                                 if (!isValidTime(time)) return 0;
                                 const [h, m] = time.split(':').map(Number);
                                 return h * 60 + m;
                             };
 
-                            // Helper to convert minutes to HH:MM
                             const toTimeStr = (mins: number) => {
                                 const h = Math.floor(mins / 60) % 24;
                                 const m = mins % 60;
                                 return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
                             };
 
-                            // Step 1: Remove specified items (only from the target day, matching by title)
+                            // --- Step 1: Remove specified items from the target day ---
+                            // Only removes items on the target day whose title fuzzy-matches
                             let removedCount = 0;
                             if (itemsToRemove.length > 0) {
                                 const initialLength = tripDoc.itinerary.length;
                                 tripDoc.itinerary = tripDoc.itinerary.filter((item: any) => {
-                                    // Only consider items on the same day
-                                    if (item.day !== targetDay) return true;
+                                    if (item.day !== targetDay) return true; // Keep items on other days
 
-                                    // Check if this item's title matches any in itemsToRemove
                                     for (const titleToRemove of itemsToRemove) {
                                         const titleMatch = item.title.toLowerCase().includes(titleToRemove.toLowerCase()) ||
                                             titleToRemove.toLowerCase().includes(item.title.toLowerCase());
@@ -487,15 +511,14 @@ export async function POST(request: NextRequest) {
                                 removedCount = initialLength - tripDoc.itinerary.length;
                             }
 
-                            // Step 2: Add new items
+                            // --- Step 2: Build and add new items ---
                             const newItems: any[] = [];
 
                             if (isOptions) {
-                                // Mutually exclusive options - same time slot with groupId
+                                // Option mode: mutually exclusive choices with shared groupId
                                 const groupId = uuidv4();
                                 const day = targetDay;
 
-                                // Use first item's time/duration if available
                                 let startTime = actionData.newItems[0]?.startTime || '09:00';
                                 let duration = actionData.newItems[0]?.duration || 60;
 
@@ -521,8 +544,8 @@ export async function POST(request: NextRequest) {
                                     createdAt: new Date()
                                 })));
                             } else {
-                                // Sequential items
-                                let currentMins = 9 * 60; // Default start
+                                // Sequential mode: schedule items one after another
+                                let currentMins = 9 * 60;
 
                                 actionData.newItems.forEach((item: any, index: number) => {
                                     const duration = item.duration || 60;
@@ -554,6 +577,7 @@ export async function POST(request: NextRequest) {
                                 });
                             }
 
+                            // --- Step 3: Persist changes ---
                             tripDoc.itinerary.push(...newItems);
                             await tripDoc.save();
 
@@ -573,16 +597,20 @@ export async function POST(request: NextRequest) {
                     }
                 }
 
-                // Clean up any leaked "Thought:" or "Action:" lines if verbose mode leaked them
-                // Regex to remove "Thought: ... \n" lines if they appear
+                // --- Step 4: CLEAN UP THE USER-FACING MESSAGE ---
+                // Strip leaked LLM reasoning artifacts ("Thought:", "Action:" lines).
+
+                // Remove any leaked internal reasoning lines from the LLM
                 messageContent = messageContent.replace(/^Thought:.*$/gm, '').trim();
                 messageContent = messageContent.replace(/^Action:.*$/gm, '').trim();
 
-                // Final clean
+                // If all content was JSON (no text left), provide a default message
                 finalContent = messageContent.trim();
                 if (!finalContent) finalContent = "I've updated the trip plan!";
 
-                // Save AI response as a message
+                // --- Step 5: SAVE AI RESPONSE TO DATABASE & RETURN ---
+                // Store the cleaned message in MongoDB and return both user message + AI response.
+
                 if (aiResult.success) {
                     const aiMessage = new Message({
                         tripId,
@@ -598,7 +626,6 @@ export async function POST(request: NextRequest) {
             } catch (aiError) {
                 console.error('AI response error:', aiError);
                 console.error('⚠️ NOTE: For local development, make sure the AI server is running: npm run dev:ai');
-                // Continue without AI response
             }
         }
 
