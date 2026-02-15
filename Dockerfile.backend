@@ -1,0 +1,28 @@
+# Use Python 3.11 slim image
+FROM python:3.11-slim
+
+# Set working directory to /app
+WORKDIR /app
+
+# Install system dependencies if needed (e.g. for building wheels)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements file
+COPY backend/requirements.txt .
+
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the backend code
+# We copy the entire backend folder to /app/backend
+COPY backend/ ./backend/
+
+# Set environment variables
+ENV HOST=0.0.0.0
+ENV PORT=8080
+ENV PYTHONUNBUFFERED=1
+
+# Run the server using python directly
+CMD ["python", "backend/server.py"]
