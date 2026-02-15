@@ -4,6 +4,8 @@
 
 WeGoAI is a modern web application that helps groups plan trips together using AI-powered suggestions, real-time collaboration, and smart itinerary management. Built with Next.js 16, React 19, and a Python AI backend powered by CrewAI and NVIDIA NIM.
 
+**Live Demo:** [https://wegoai-frontend-86803365913.us-central1.run.app](https://wegoai-frontend-86803365913.us-central1.run.app)
+
 ---
 
 ## Features
